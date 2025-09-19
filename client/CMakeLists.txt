@@ -1,0 +1,54 @@
+cmake_minimum_required(VERSION 3.16)
+include(${PICO_SDK_PATH}/external/pico_sdk_import.cmake)
+include(${PICO_EXTRAS_PATH}/external/pico_extras_import.cmake)
+
+set(MAIN_NAME device)
+
+project(${MAIN_NAME} C CXX ASM)
+
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
+
+# Collect source files from src directory (excluding main.c)
+file(GLOB_RECURSE SOURCE_FILES "src/*.c")
+
+set(SOURCES
+    main.c
+    ${SOURCE_FILES}
+    )
+
+set(DEFINES
+     WIFI_SSID=\"${WIFI_SSID}\"
+     WIFI_PASSWORD=\"${WIFI_PASSWORD}\"
+     CYW43_HOST_NAME=\"${CONFIG_HOSTNAME}\"
+    )
+
+pico_sdk_init()
+
+add_executable(${MAIN_NAME}
+       ${SOURCES}
+       )
+
+# target_compile_options(${MAIN_NAME} PRIVATE -g)
+
+target_compile_definitions(${MAIN_NAME} PRIVATE
+       ${DEFINES}
+       )
+
+target_include_directories(${MAIN_NAME} PRIVATE
+          ${CMAKE_CURRENT_LIST_DIR}
+          ${CMAKE_CURRENT_LIST_DIR}/include
+          ${CMAKE_CURRENT_LIST_DIR}/.. # for our common lwipopts
+        )
+
+target_link_libraries(${MAIN_NAME}
+          pico_cyw43_arch_lwip_poll
+          pico_stdlib
+        )
+
+pico_add_extra_outputs(${PROJECT_NAME})
+
+target_link_libraries(${PROJECT_NAME} pico_stdlib hardware_spi hardware_pwm)
+
+pico_enable_stdio_usb(${PROJECT_NAME} 1)
+pico_enable_stdio_uart(${PROJECT_NAME} 0)
