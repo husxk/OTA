@@ -37,7 +37,10 @@ build/device.uf2: ninja
 flash: build/device.uf2
 	scripts/rpiflash.sh $(RPI_USB)
 
+term:
+	scripts/picoterm.sh
+
 clean:
 	rm -rf build/
 
-.PHONY: ninja flash clean pico_sdk
+.PHONY: ninja flash term clean pico_sdk
