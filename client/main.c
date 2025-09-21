@@ -39,36 +39,9 @@ workloop(device_ctx_t* ctx)
 {
   cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);
 
-  uint32_t message_counter = 1;
-  absolute_time_t next_message_time = make_timeout_time_ms(5000);
-
   while(true)
   {
     tcp_work(ctx);
-
-    absolute_time_t now = get_absolute_time();
-
-    if (now >= next_message_time)
-    {
-      if (tcp_is_conn_active(ctx))
-      {
-        char message[32];
-        int len = snprintf(message, sizeof(message),
-                           "HELLO FROM PICO %u\n", message_counter);
-
-        if (tcp_send_data(ctx, message, len))
-        {
-          DEBUG("TCP: Sent message %u\n", message_counter);
-          message_counter++;
-        }
-        else
-        {
-          DEBUG("TCP: Failed to send message %u\n", message_counter);
-        }
-      }
-
-      next_message_time = make_timeout_time_ms(5000);
-    }
   }
 }
 

@@ -7,6 +7,9 @@
 
 #include "pico/cyw43_arch.h"
 
+#include "libota/packet.h"
+#include "libota/protocol.h"
+
 int
 tcp_init_client(device_ctx_t* ctx)
 {
@@ -29,6 +32,83 @@ tcp_client_write(struct tcp_pcb* tpcb, const uint8_t *data, uint16_t size)
 }
 
 static void
+log_data_packet(const uint8_t* payload)
+{
+  DEBUG("TCP: Received DATA packet (%d bytes):\n", OTA_DATA_PAYLOAD_SIZE);
+  MEMDUMP(payload, OTA_DATA_PAYLOAD_SIZE);
+}
+
+static bool
+validate_data_packet(const uint8_t* buffer, size_t size)
+{
+  const uint8_t* payload = OTA_packet_get_data(buffer, size);
+
+  if (payload != NULL)
+  {
+    log_data_packet(payload);
+    return true;
+  }
+  else
+  {
+    DEBUG("TCP: Invalid DATA packet\n");
+    return false;
+  }
+}
+
+static void
+send_ack_packet(struct tcp_pcb* tpcb)
+{
+  uint8_t ack_buffer[OTA_ACK_PACKET_LENGTH];
+  size_t ack_size = OTA_packet_write_ack(ack_buffer, sizeof(ack_buffer));
+
+  if (ack_size > 0)
+  {
+    err_t err = tcp_client_write(tpcb, ack_buffer, ack_size);
+    if (err == ERR_OK)
+    {
+      DEBUG("TCP: Sent ACK\n");
+    }
+    else
+    {
+      DEBUG("TCP: Failed to send ACK\n");
+    }
+  }
+}
+
+static void
+send_nack_packet(struct tcp_pcb* tpcb)
+{
+  uint8_t nack_buffer[OTA_NACK_PACKET_LENGTH];
+  size_t nack_size = OTA_packet_write_nack(nack_buffer, sizeof(nack_buffer));
+
+  if (nack_size > 0)
+  {
+    err_t err = tcp_client_write(tpcb, nack_buffer, nack_size);
+    if (err == ERR_OK)
+    {
+      DEBUG("TCP: Sent NACK\n");
+    }
+    else
+    {
+      DEBUG("TCP: Failed to send NACK\n");
+    }
+  }
+}
+
+static void
+handle_data_packet(device_ctx_t* ctx, struct tcp_pcb* tpcb, const uint8_t* buffer, size_t size)
+{
+  if (validate_data_packet(buffer, size))
+  {
+    send_ack_packet(tpcb);
+  }
+  else
+  {
+    send_nack_packet(tpcb);
+  }
+}
+
+static void
 packet_handler(device_ctx_t* ctx, struct tcp_pcb* tpcb)
 {
   const int total_len = ctx->tcp.recv_len;
@@ -40,13 +120,32 @@ packet_handler(device_ctx_t* ctx, struct tcp_pcb* tpcb)
     return;
   }
 
-  // Log received data
-  DEBUG("TCP: Received %d bytes: ", total_len);
-  for(int i = 0; i < total_len; i++)
+  // Parse OTA packet
+  uint8_t packet_type = OTA_packet_get_type(buffer, total_len);
+
+  switch (packet_type)
   {
-    DEBUG("%c", buffer[i]);
+    case OTA_DATA_TYPE:
+      handle_data_packet(ctx, tpcb, buffer, total_len);
+      break;
+
+    case OTA_ACK_TYPE:
+      DEBUG("TCP: Received ACK packet\n");
+      break;
+
+    case OTA_NACK_TYPE:
+      DEBUG("TCP: Received NACK packet\n");
+      break;
+
+    case OTA_INVALID_TYPE:
+    default:
+      DEBUG("TCP: Received invalid packet (type: 0x%02X)\n", packet_type);
+      send_nack_packet(tpcb);
+      break;
   }
-  DEBUG("\n");
+
+  // Reset buffer for next packet
+  ctx->tcp.recv_len = 0;
 }
 
 bool
@@ -97,9 +196,9 @@ tcp_client_recv_(device_ctx_t *ctx, struct tcp_pcb* tpcb, struct pbuf* p)
    * TODO: We should probably call pbuf_copy_partial in a loop
    *       to make sure we receive everything.
    */
-  const uint16_t buffer_left = TCP_BUF_SIZE;
-  ctx->tcp.recv_len =
-    pbuf_copy_partial(p, ctx->tcp.recv_buffer,
+  const uint16_t buffer_left = TCP_BUF_SIZE - ctx->tcp.recv_len;
+  ctx->tcp.recv_len +=
+    pbuf_copy_partial(p, &ctx->tcp.recv_buffer[ctx->tcp.recv_len],
                       p->tot_len > buffer_left ? buffer_left : p->tot_len, 0);
 
   tcp_recved(tpcb, p->tot_len);

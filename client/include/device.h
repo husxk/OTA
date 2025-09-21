@@ -2,7 +2,7 @@
 
 #include "pico/stdlib.h"
 
-#define TCP_BUF_SIZE 64
+#define TCP_BUF_SIZE 512
 
 typedef struct
 {

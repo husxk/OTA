@@ -27,6 +27,7 @@ pico_sdk: checkenv_PICO_SDK_PATH checkenv_PICO_EXTRAS_PATH
 build/: ./configure_wifi.sh wlan.ini pico_sdk
 	CFLAGS="$(CFLAGS)" \
 	CONFIG_HOSTNAME=$(CONFIG_HOSTNAME) \
+	PKG_CONFIG_PATH=../build/lib/pkgconfig \
 	./configure_wifi.sh
 
 ninja: build/

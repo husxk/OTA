@@ -41,6 +41,13 @@ target_include_directories(${MAIN_NAME} PRIVATE
           ${CMAKE_CURRENT_LIST_DIR}/.. # for our common lwipopts
         )
 
+find_package(PkgConfig REQUIRED)
+
+pkg_check_modules(LIBOTA REQUIRED libota)
+
+target_include_directories(${MAIN_NAME} PRIVATE ${LIBOTA_INCLUDE_DIRS})
+target_compile_options(${MAIN_NAME} PRIVATE ${LIBOTA_CFLAGS_OTHER})
+
 target_link_libraries(${MAIN_NAME}
           pico_cyw43_arch_lwip_poll
           pico_stdlib
