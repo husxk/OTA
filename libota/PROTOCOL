@@ -1,0 +1,87 @@
+Binary packet protocol:
+
+[LENGTH][TYPE][TYPE_PAYLOAD]
+
+LENGTH        uint16_t
+TYPE          uint8_t
+TYPE_PAYLOAD  uint8_t[]
+
+where:
+  LENGTH       - length of whole packet
+  TYPE         - type of packet
+  TYPE_PAYLOAD - packet specific payload
+
+Note: All multi-byte values are encoded in network byte order (big-endian).
+
+
+
+Current TYPEs:
+  TYPE           CODE
+
+  INVALID        0x00
+  ACK            0x01
+  NACK           0x02
+  DATA           0x03
+
+
+INVALID binary packet protocol:
+
+INVALID packet means that the packet type is unknown or invalid.
+This type is reserved and should not be used for actual packets.
+It is returned by parsing functions when the packet type is not recognized.
+
+
+ACK binary packet protocol:
+
+[LENGTH][ACK]
+
+LENGTH        uint16_t
+TYPE          uint8_t
+
+where:
+  LENGTH      = Length of whole packet.
+                Must be set to 0x03 (3 bytes).
+
+  ACK         = 0x01
+
+ACK packet means that the last packet was received successfully.
+Used for acknowledgment of received packets.
+
+
+
+NACK binary packet protocol:
+
+[LENGTH][NACK]
+
+LENGTH        uint16_t
+TYPE          uint8_t
+
+where:
+  LENGTH      = Length of whole packet.
+                Must be set to 0x03 (3 bytes).
+
+  NACK        = 0x02
+
+NACK packet means that the last packet was rejected.
+It may be sent due to invalid packet or error condition.
+
+
+
+DATA binary packet protocol:
+
+[LENGTH][DATA][PAYLOAD]
+
+LENGTH        uint16_t
+TYPE          uint8_t
+PAYLOAD       uint8_t[256]
+
+where:
+  LENGTH      = Length of whole packet.
+                Must be set to 0x0103 (259 bytes).
+
+  DATA        = 0x03
+
+  PAYLOAD     = 256 bytes of binary data.
+
+DATA packet contains binary firmware data to be written to flash memory.
+The payload size is fixed at 256 bytes.

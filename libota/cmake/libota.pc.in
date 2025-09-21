@@ -1,0 +1,10 @@
+prefix=@CMAKE_INSTALL_PREFIX@
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: @PROJECT_NAME@
+Description: Over-The-Air update library
+Version: @PROJECT_VERSION@
+Libs:
+Cflags: -I${includedir}
