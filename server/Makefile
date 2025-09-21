@@ -12,7 +12,7 @@ all: build/ make
 build/: CMakeLists.txt
 	echo -e "$(GREEN)Configuring CMake build...$(ZERO)"
 	mkdir -p build
-	cd build && cmake ..
+	cd build && PKG_CONFIG_PATH=../../build/lib/pkgconfig cmake ..
 
 make: build/
 	echo -e "$(GREEN)Building $(PURPLE)$(MAIN_NAME)$(GREEN)...$(ZERO)"

@@ -18,4 +18,11 @@ add_executable(${MAIN_NAME} main.cpp ${SOURCE_FILES})
 
 target_include_directories(${MAIN_NAME} PRIVATE include)
 
+find_package(PkgConfig REQUIRED)
+
+pkg_check_modules(LIBOTA REQUIRED libota)
+
+target_include_directories(${MAIN_NAME} PRIVATE ${LIBOTA_INCLUDE_DIRS})
+target_compile_options(${MAIN_NAME} PRIVATE ${LIBOTA_CFLAGS_OTHER})
+
 target_compile_options(${MAIN_NAME} PRIVATE -Wall -Wextra)
