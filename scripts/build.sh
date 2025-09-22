@@ -16,4 +16,8 @@ cd client && make && cd ..
 echo "Building server..."
 cd server && make && cd ..
 
+# Copy client binary to server build directory
+echo "Copying device.bin to server..."
+cp client/build/device.bin server/build/device.bin
+
 echo "OTA project build complete!"
