@@ -20,9 +20,9 @@ make: build/
 
 build/$(MAIN_NAME): make
 
-run: build/$(MAIN_NAME)
-	echo -e "$(GREEN)Running $(PURPLE)$(MAIN_NAME)$(GREEN)...$(ZERO)"
-	cd build && ./$(MAIN_NAME)
+run: build/$(MAIN_NAME) build/device.bin
+	echo -e "$(GREEN)Running $(PURPLE)$(MAIN_NAME)$(GREEN) with device.bin...$(ZERO)"
+	cd build && ./$(MAIN_NAME) device.bin
 
 clean:
 	echo -e "$(RED)Cleaning build directory...$(ZERO)"

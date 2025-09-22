@@ -1,9 +1,11 @@
 #include "file_reader.h"
+#include "libota/protocol.h"
 
 #include <cstdio>
 #include <cstdlib>
 #include <cerrno>
 #include <cstring>
+#include <sys/stat.h>
 
 void file_reader::handle_fatal_error(const char* operation) const
 {
@@ -24,6 +26,20 @@ bool file_reader::load_file(const std::string& file_path)
     
     file_handle.set(file);
     is_loaded = true;
+
+    struct stat file_stat;
+    if (fstat(fileno(file), &file_stat) != 0)
+    {
+        handle_fatal_error("fstat");
+    }
+
+    file_size = file_stat.st_size;
+    bytes_sent = 0;
+    size_t packets_needed = (file_size + OTA_DATA_PAYLOAD_SIZE - 1) / OTA_DATA_PAYLOAD_SIZE;
+
+    printf("File: %s\n", file_path.c_str());
+    printf("Size: %zu bytes\n", file_size);
+    printf("Packets needed: %zu\n", packets_needed);
 
     return true;
 }

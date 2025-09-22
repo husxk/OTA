@@ -18,11 +18,33 @@ public:
         return file_path;
     }
 
+    size_t get_file_size() const
+    {
+        return file_size;
+    }
+
+    size_t get_bytes_sent() const
+    {
+        return bytes_sent;
+    }
+
+    void add_bytes_sent(size_t bytes)
+    {
+        bytes_sent += bytes;
+    }
+
+    bool is_transfer_complete() const
+    {
+        return bytes_sent >= file_size;
+    }
+
 protected:
     std::string file_path;
     file_wrapper file_handle;
     bool is_loaded = false;
     bool eof_reached = false;
+    size_t file_size = 0;
+    size_t bytes_sent = 0;
 
 private:
     void handle_fatal_error(const char* operation) const;
