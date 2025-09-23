@@ -29,6 +29,8 @@ add_executable(${MAIN_NAME}
        ${SOURCES}
        )
 
+pico_set_linker_script(${MAIN_NAME} ${CMAKE_CURRENT_SOURCE_DIR}/memmap.ld)
+
 # target_compile_options(${MAIN_NAME} PRIVATE -g)
 
 target_compile_definitions(${MAIN_NAME} PRIVATE
