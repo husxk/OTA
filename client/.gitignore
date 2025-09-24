@@ -1,2 +1,5 @@
 build/
 wlan.ini
+
+# Generated flash region file from CMake template
+cmake/pico_flash_region.ld

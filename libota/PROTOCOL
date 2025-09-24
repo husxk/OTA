@@ -22,6 +22,7 @@ Current TYPEs:
   ACK            0x01
   NACK           0x02
   DATA           0x03
+  FIN            0x04
 
 
 INVALID binary packet protocol:
@@ -85,3 +86,21 @@ where:
 
 DATA packet contains binary firmware data to be written to flash memory.
 The payload size is fixed at 256 bytes.
+
+
+
+FIN binary packet protocol:
+
+[LENGTH][FIN]
+
+LENGTH        uint16_t
+TYPE          uint8_t
+
+where:
+  LENGTH      = Length of whole packet.
+                Must be set to 0x03 (3 bytes).
+
+  FIN         = 0x04
+
+FIN packet signals the end of file transfer.
+After receiving FIN, the client should disconnect and proceed with hardware binary update.

@@ -25,3 +25,7 @@
 #define OTA_DATA_TYPE                   0x03
 #define OTA_DATA_PAYLOAD_SIZE           256
 #define OTA_DATA_PACKET_LENGTH          (OTA_COMMON_PACKET_LENGTH + OTA_DATA_PAYLOAD_SIZE)
+
+/* FIN packet type */
+#define OTA_FIN_TYPE                    0x04
+#define OTA_FIN_PACKET_LENGTH           OTA_COMMON_PACKET_LENGTH

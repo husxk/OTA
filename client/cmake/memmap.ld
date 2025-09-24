@@ -28,11 +28,14 @@
 
 MEMORY
 {
-    INCLUDE "pico_flash_region.ld"
+  /* Move to other file to let cmake transform it */
+    FLASH(rx) : ORIGIN = 0x10000000, LENGTH = 1024 * 1024
+    OTA_STORAGE(rw) : ORIGIN = 0x10000000 + 1024 * 1024, LENGTH = 1024 * 1024
     RAM(rwx) : ORIGIN =  0x20000000, LENGTH = 256k
     SCRATCH_X(rwx) : ORIGIN = 0x20040000, LENGTH = 4k
     SCRATCH_Y(rwx) : ORIGIN = 0x20041000, LENGTH = 4k
 }
+
 
 ENTRY(_entry_point)
 
@@ -262,6 +265,15 @@ SECTIONS
         KEEP(*(.embedded_end_block*))
         PROVIDE(__flash_binary_end = .);
     } > FLASH
+
+    . = ALIGN(4096);
+
+    /* OTA storage section for firmware updates */
+    .ota_storage : {
+        __ota_storage_start__ = .;
+        . = ALIGN(4096);  /* Align to 4KB flash page size */
+        __ota_storage_end__ = .;
+    } > OTA_STORAGE
 
     /* stack limit is poorly named, but historically is maximum heap ptr */
     __StackLimit = ORIGIN(RAM) + LENGTH(RAM);

@@ -6,9 +6,28 @@
 #include "lwip/ip_addr.h"
 
 #include "pico/cyw43_arch.h"
+#include "hardware/flash.h"
+#include "hardware/sync.h"
+#include "pico/bootrom.h"
+#include "hardware/watchdog.h"
+#include "hardware/structs/watchdog.h"
 
 #include "libota/packet.h"
 #include "libota/protocol.h"
+
+// Forward declaration for flash update function
+void __no_inline_not_in_flash_func(ota_perform_flash_update)(device_ctx_t* ctx);
+
+// RAM-resident memcpy function
+static void __no_inline_not_in_flash_func(memcpy_ram)(void* dest, const void* src, size_t n)
+{
+  uint8_t* d = (uint8_t*)dest;
+  const uint8_t* s = (const uint8_t*)src;
+  
+  for (size_t i = 0; i < n; i++) {
+    d[i] = s[i];
+  }
+}
 
 int
 tcp_init_client(device_ctx_t* ctx)
@@ -17,6 +36,9 @@ tcp_init_client(device_ctx_t* ctx)
   ctx->tcp.recv_len = 0;
   ctx->tcp.connected = false;
   ctx->tcp.last_reconnect_attempt = 0;
+
+  ctx->ota.ota_addr = OTA_STORAGE_START;
+  ctx->ota.current_page = 0;
 
   // Try to connect, but don't fail if it doesn't work immediately
   // The reconnection logic in tcp_work() will handle retries
@@ -98,14 +120,32 @@ send_nack_packet(struct tcp_pcb* tpcb)
 static void
 handle_data_packet(device_ctx_t* ctx, struct tcp_pcb* tpcb, const uint8_t* buffer, size_t size)
 {
-  if (validate_data_packet(buffer, size))
+  if (!validate_data_packet(buffer, size))
   {
-    send_ack_packet(tpcb);
-  }
-  else
-  {
+    DEBUG("OTA: Invalid packet, resetting flash offset and sending NACK\n");
+    ota_reset_flash_offset(ctx);
     send_nack_packet(tpcb);
+    return;
   }
+
+  const uint8_t* payload = OTA_packet_get_data(buffer, size);
+  if (payload == NULL)
+  {
+    DEBUG("OTA: Failed to extract payload, resetting flash offset and sending NACK\n");
+    ota_reset_flash_offset(ctx);
+    send_nack_packet(tpcb);
+    return;
+  }
+
+  if (!ota_write_packet_to_flash(ctx, payload, OTA_DATA_PAYLOAD_SIZE))
+  {
+    DEBUG("OTA: Failed to write packet to flash, resetting flash offset and sending NACK\n");
+    ota_reset_flash_offset(ctx);
+    send_nack_packet(tpcb);
+    return;
+  }
+
+  send_ack_packet(tpcb);
 }
 
 static void
@@ -135,6 +175,21 @@ packet_handler(device_ctx_t* ctx, struct tcp_pcb* tpcb)
 
     case OTA_NACK_TYPE:
       DEBUG("TCP: Received NACK packet\n");
+      break;
+
+    case OTA_FIN_TYPE:
+      DEBUG("TCP: Received FIN packet - file transfer complete!\n");
+      DEBUG("TCP: Total bytes written to flash: %u\n",
+            ctx->ota.ota_addr - OTA_STORAGE_START);
+
+      send_ack_packet(tpcb);
+      
+      // Force lwIP to send the ACK packet immediately
+      tcp_output(tpcb);
+      sleep_ms(100);
+
+      // no return
+      ota_perform_flash_update(ctx);
       break;
 
     case OTA_INVALID_TYPE:
@@ -338,4 +393,121 @@ tcp_send_data(device_ctx_t* ctx, const char* data, size_t len)
   err_t err = tcp_client_write(ctx->tcp.client_pcb, (const uint8_t*)data, len);
 
   return err == ERR_OK;
+}
+
+bool
+ota_write_packet_to_flash(device_ctx_t* ctx, const uint8_t* data, size_t size)
+{
+  // Check if we would overflow the OTA storage
+  if (ctx->ota.ota_addr + size > OTA_STORAGE_END)
+  {
+    DEBUG("OTA: Would overflow OTA storage (offset: %u, size: %zu, max: %u)\n", 
+          ctx->ota.ota_addr, size, OTA_STORAGE_SIZE);
+    return false;
+  }
+
+  // Check if we need to erase a new sector (4096 bytes)
+  if ((ctx->ota.ota_addr % FLASH_SECTOR_SIZE) == 0)
+  {
+    DEBUG("OTA: Erasing flash sector at 0x%08X\n", ctx->ota.ota_addr);
+
+    const uint32_t ints = save_and_disable_interrupts();
+    flash_range_erase(ctx->ota.ota_addr - XIP_BASE, FLASH_SECTOR_SIZE);
+    restore_interrupts(ints);
+  }
+
+  // Write data to flash (must be 256-byte aligned and multiple of 256 bytes)
+  DEBUG("OTA: Writing %zu bytes to flash at 0x%08X (page: %u)\n", 
+        size, ctx->ota.ota_addr, ctx->ota.current_page);
+
+  const uint32_t ints = save_and_disable_interrupts();
+  flash_range_program(ctx->ota.ota_addr - XIP_BASE, data, size);
+  restore_interrupts(ints);
+  
+  // Update offsets
+  ctx->ota.ota_addr += size;
+  ctx->ota.current_page++;
+
+  DEBUG("OTA: Written packet, address: %u, page: %u\n",
+        ctx->ota.ota_addr,
+        ctx->ota.current_page);
+
+  return true;
+}
+
+void
+ota_reset_flash_offset(device_ctx_t* ctx)
+{
+  ctx->ota.ota_addr = OTA_STORAGE_START;
+  ctx->ota.current_page = 0;
+  DEBUG("OTA: Reset flash offsets to 0\n");
+}
+
+// This function is placed in RAM using Pico SDK macro so it can execute
+// while the main flash is being updated
+void
+__no_inline_not_in_flash_func(ota_perform_flash_update)(device_ctx_t* ctx)
+{
+  DEBUG("OTA: Starting flash update test\n");
+  DEBUG("OTA: OTA storage start: 0x%08X\n", OTA_STORAGE_START);
+  DEBUG("OTA: OTA storage end: 0x%08X\n", ctx->ota.ota_addr);
+  DEBUG("OTA: Flash start: 0x%08X\n", XIP_BASE);
+
+  // Disable interrupts to prevent interference during flash update
+  const uint32_t ints = save_and_disable_interrupts();
+
+  uint32_t flash_addr = XIP_BASE;
+  uint32_t ota_addr = OTA_STORAGE_START;
+
+  int sector_count = 0;
+  int page_count = 0;
+
+  while (ota_addr < ctx->ota.ota_addr)
+  {
+    // DEBUG("OTA: Would erase sector %d at flash_addr: 0x%08X (controller: 0x%08X)\n", 
+    //       sector_count, flash_addr, flash_addr - XIP_BASE);
+    
+    // Clear one sector (4096 bytes) in main flash
+    flash_range_erase(flash_addr - XIP_BASE, FLASH_SECTOR_SIZE);
+
+    // Write all necessary pages in this sector
+    for (int page = 0; page < (FLASH_SECTOR_SIZE / FLASH_PAGE_SIZE); page++)
+    {
+      // Check if we have more data to write
+      if (ota_addr >= ctx->ota.ota_addr)
+        break;
+
+      // DEBUG("OTA: Would copy page %d from OTA: 0x%08X to Flash: 0x%08X\n", 
+      //       page_count, ota_addr, flash_addr);
+
+      // Copy one page (256 bytes) from OTA storage to stack buffer using RAM-resident memcpy
+      uint8_t page_buffer[FLASH_PAGE_SIZE];
+      memcpy_ram(page_buffer, (uint8_t*)ota_addr, FLASH_PAGE_SIZE);
+      
+      // Write page buffer to main flash
+      flash_range_program(flash_addr - XIP_BASE, page_buffer, FLASH_PAGE_SIZE);
+
+      ota_addr += FLASH_PAGE_SIZE;
+      flash_addr += FLASH_PAGE_SIZE;
+      page_count++;
+    }
+
+    sector_count++;
+  }
+
+
+  // DEBUG("OTA: Total sectors: %d, pages: %d\n", sector_count, page_count);
+  // DEBUG("OTA: Testing reset functionality\n");
+
+  // Reset the device to test reset functionality
+  watchdog_hw->ctrl = WATCHDOG_CTRL_ENABLE_BITS | WATCHDOG_CTRL_TRIGGER_BITS;
+  watchdog_hw->load = 0; // Immediate reset
+  
+  // Wait for reset
+  while (true) {
+    // Device will reset
+  }
+
+  // Note: We don't restore interrupts here as we'll reboot the device
+  // restore_interrupts(ints);
 }
