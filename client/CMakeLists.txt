@@ -53,6 +53,7 @@ target_compile_options(${MAIN_NAME} PRIVATE ${LIBOTA_CFLAGS_OTHER})
 target_link_libraries(${MAIN_NAME}
           pico_cyw43_arch_lwip_poll
           pico_stdlib
+          ${LIBOTA_LDFLAGS}
         )
 
 pico_add_extra_outputs(${PROJECT_NAME})
