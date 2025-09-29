@@ -5,13 +5,18 @@ project(ota VERSION 1.0.0 LANGUAGES C)
 set(CMAKE_C_STANDARD 23)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
-file(GLOB LIBOTA_HEADERS "include/*.h")
+# Set default OTA_RAM_FUNCTION definition if not provided by user
+if(NOT DEFINED OTA_RAM_FUNCTION_DEFINITION)
+    message(WARNING "OTA_RAM_FUNCTION_DEFINITION is not defined. This may cause runtime errors. Please define it in your toolchain file or CMake configuration.")
 
-add_library(ota INTERFACE)
+    set(OTA_RAM_FUNCTION_DEFINITION "func_name")
+endif()
 
-set_target_properties(ota PROPERTIES
-    VERSION ${PROJECT_VERSION}
-    PUBLIC_HEADER "${LIBOTA_HEADERS}"
+# Generate OTA_RAM_FUNCTION header from template
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/ota_ram_function.h.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/ota_ram_function.h"
+    @ONLY
 )
 
 file(GLOB LIBOTA_SOURCES "src/*.c")
@@ -23,12 +28,18 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
   PUBLIC_HEADER "${LIBOTA_HEADERS}")
 
 target_include_directories(${PROJECT_NAME}
-    PUBLIC include)
+    PUBLIC include
+    PUBLIC "${CMAKE_CURRENT_BINARY_DIR}/generated")
 
 # Install the library and headers
 install(TARGETS ${PROJECT_NAME}
     ARCHIVE DESTINATION lib
     PUBLIC_HEADER DESTINATION include/libota
+)
+
+# Install generated headers
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/generated/ota_ram_function.h"
+    DESTINATION include/libota
 )
 
 # Create pkg-config file

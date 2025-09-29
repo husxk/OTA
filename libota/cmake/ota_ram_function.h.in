@@ -1,0 +1,6 @@
+#pragma once
+
+// Auto-generated header for OTA_RAM_FUNCTION definition
+
+// This should be used as: some_type OTA_RAM_FUNCTION(my_function)(args) { ... }
+#define OTA_RAM_FUNCTION(func_name) @OTA_RAM_FUNCTION_DEFINITION@
