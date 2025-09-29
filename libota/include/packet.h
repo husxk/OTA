@@ -22,6 +22,8 @@ size_t OTA_packet_write_ack(uint8_t* buffer, size_t size);
 
 size_t OTA_packet_write_nack(uint8_t* buffer, size_t size);
 
+size_t OTA_packet_write_fin(uint8_t* buffer, size_t size);
+
 size_t OTA_packet_write_data(uint8_t* buffer, size_t size, const uint8_t* data, size_t data_size);
 
 uint8_t OTA_packet_get_type(const uint8_t* buffer, size_t size);
