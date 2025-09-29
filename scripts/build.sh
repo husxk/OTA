@@ -4,9 +4,21 @@ set -e
 
 echo "Building OTA project..."
 
-# Build libota first
-echo "Building libota..."
-cd libota && make install && cd ..
+# Build libota for both native and pico
+echo "Building libota for native and pico..."
+cd libota
+
+# Build native version
+echo "  Building native version..."
+make clean
+CMAKE_INSTALL_PREFIX="$(pwd)/../build/x86" make && make install
+
+# Build pico version
+echo "  Building pico version..."
+make clean
+CMAKE_INSTALL_PREFIX="$(pwd)/../build/pico" make pico && make install
+
+cd ..
 
 # Build client
 echo "Building client..."
