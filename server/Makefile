@@ -4,7 +4,6 @@ GREEN := $(ESC)[0;32m
 PURPLE := $(ESC)[0;35m
 ZERO := $(ESC)[0;0m
 
-PROJECT_NAME := OTA_Server
 MAIN_NAME := ota_server
 
 all: build/ make
@@ -12,7 +11,7 @@ all: build/ make
 build/: CMakeLists.txt
 	echo -e "$(GREEN)Configuring CMake build...$(ZERO)"
 	mkdir -p build
-	cd build && PKG_CONFIG_PATH=../../build/lib/pkgconfig cmake ..
+	cd build && PKG_CONFIG_PATH=../../build/x86/lib/pkgconfig cmake ..
 
 make: build/
 	echo -e "$(GREEN)Building $(PURPLE)$(MAIN_NAME)$(GREEN)...$(ZERO)"
