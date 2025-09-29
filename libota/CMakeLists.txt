@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.10)
 
-project(libota VERSION 1.0.0 LANGUAGES C)
+project(ota VERSION 1.0.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 23)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -14,26 +14,31 @@ set_target_properties(ota PROPERTIES
     PUBLIC_HEADER "${LIBOTA_HEADERS}"
 )
 
-# Set include directories
-target_include_directories(ota INTERFACE
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:include/libota>
-)
+file(GLOB LIBOTA_SOURCES "src/*.c")
+file(GLOB LIBOTA_HEADERS "include/*.h")
 
-# Install headers
-install(TARGETS ota
+add_library(${PROJECT_NAME} STATIC ${LIBOTA_SOURCES})
+
+set_target_properties(${PROJECT_NAME} PROPERTIES
+  PUBLIC_HEADER "${LIBOTA_HEADERS}")
+
+target_include_directories(${PROJECT_NAME}
+    PUBLIC include)
+
+# Install the library and headers
+install(TARGETS ${PROJECT_NAME}
+    ARCHIVE DESTINATION lib
     PUBLIC_HEADER DESTINATION include/libota
 )
 
 # Create pkg-config file
-set(PC_NAME "${PROJECT_NAME}")
 configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/cmake/libota.pc.in"
-    "${CMAKE_CURRENT_BINARY_DIR}/${PC_NAME}.pc"
+    "${CMAKE_CURRENT_BINARY_DIR}/libota.pc"
     @ONLY
 )
 
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/${PC_NAME}.pc"
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/libota.pc"
     DESTINATION lib/pkgconfig
 )
 
@@ -41,6 +46,6 @@ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/${PC_NAME}.pc"
 message(STATUS "")
 message(STATUS "libota configuration:")
 message(STATUS "  Version: ${PROJECT_VERSION}")
-message(STATUS "  Library type: HEADER-ONLY")
+message(STATUS "  Library type: STATIC")
 message(STATUS "  Install prefix: ${CMAKE_INSTALL_PREFIX}")
 message(STATUS "")

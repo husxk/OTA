@@ -6,5 +6,5 @@ includedir=${prefix}/include
 Name: @PROJECT_NAME@
 Description: Over-The-Air update library
 Version: @PROJECT_VERSION@
-Libs:
+Libs: -L${libdir} -lota
 Cflags: -I${includedir}
