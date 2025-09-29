@@ -149,6 +149,53 @@ int main(int argc, char* argv[])
         packet_number++;
     }
 
+    // Send FIN packet to signal end of transfer
+    if (!server.has_client() || !reader.is_transfer_complete())
+    {
+        goto transfer_failed;
+    }
+
+    printf("File transfer complete, sending FIN packet...\n");
+
+    uint8_t fin_buffer[OTA_FIN_PACKET_LENGTH];
+    size_t fin_size;
+    fin_size = OTA_packet_write_fin(fin_buffer, sizeof(fin_buffer));
+
+    if (fin_size == 0)
+    {
+        printf("Failed to create FIN packet\n");
+        goto transfer_failed;
+    }
+
+    size_t bytes_sent;
+    bytes_sent = server.send_data(fin_buffer, fin_size);
+    if (bytes_sent != fin_size)
+    {
+        printf("Failed to send FIN packet\n");
+        goto transfer_failed;
+    }
+
+    printf("FIN packet sent successfully\n");
+
+    // Wait for ACK response to FIN
+    size_t bytes_received;
+    bytes_received = server.receive_data(recv_buffer, sizeof(recv_buffer));
+    if (bytes_received == 0)
+    {
+        printf("No response to FIN packet\n");
+        goto transfer_failed;
+    }
+
+    uint8_t fin_packet_type;
+    fin_packet_type = OTA_packet_get_type(recv_buffer, bytes_received);
+    if (fin_packet_type != OTA_ACK_TYPE)
+    {
+        printf("Received unexpected response to FIN: 0x%02X\n", fin_packet_type);
+        goto transfer_failed;
+    }
+
+    printf("Received ACK for FIN packet\n");
+
 transfer_failed:
 
     if (reader.is_transfer_complete())
