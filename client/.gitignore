@@ -1,2 +1,4 @@
 build/
 wlan.ini
+
+cmake/memmap.ld

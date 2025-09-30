@@ -7,6 +7,7 @@
 
 #include "pico/stdlib.h"
 #include "pico/cyw43_arch.h"
+#include "hardware/gpio.h"
 
 #include "lwip/ip_addr.h"
 #include "lwip/netif.h"
@@ -34,6 +35,19 @@ print_ip_address(void)
   }
 }
 
+static void
+init_leds(void)
+{
+  // Initialize GPIO pins for LEDs
+  gpio_init(13);
+  gpio_init(15);
+  gpio_set_dir(13, GPIO_OUT);
+  gpio_set_dir(15, GPIO_OUT);
+
+  gpio_put(13, 1);
+  gpio_put(15, 1);
+}
+
 static int
 workloop(device_ctx_t* ctx)
 {
@@ -42,6 +56,13 @@ workloop(device_ctx_t* ctx)
   while(true)
   {
     tcp_work(ctx);
+
+    // Check if firmware update timeout has been reached
+    // On success, the device will reboot, memory will be overwritten
+    // and never return.
+    // On failure, the device will continue running,
+    // and we cant do anything about it - probably a bad configuration.
+    check_update_timeout(ctx);
   }
 }
 
@@ -73,6 +94,9 @@ main_()
     free(ctx);
     return 1;
   }
+
+  // Turn on LEDs just before work loop
+  init_leds();
 
   const int ret = workloop(ctx);
 

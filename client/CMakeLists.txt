@@ -17,21 +17,37 @@ set(SOURCES
     ${SOURCE_FILES}
     )
 
+# Reserve half of flash for OTA updates
+set(PICO_FLASH_SIZE_BYTES "1024 * 1024")  # 1MB for flash
+set(OTA_STORAGE_SIZE "1024 * 1024")       # 1MB for OTA
+
 set(DEFINES
      WIFI_SSID=\"${WIFI_SSID}\"
      WIFI_PASSWORD=\"${WIFI_PASSWORD}\"
      CYW43_HOST_NAME=\"${CONFIG_HOSTNAME}\"
+     OTA_STORAGE_SIZE_BYTES=${OTA_STORAGE_SIZE}
     )
 
 pico_sdk_init()
+
+# Create custom flash region template with OTA storage
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/memmap.template.ld
+    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/memmap.ld
+    @ONLY
+)
 
 add_executable(${MAIN_NAME}
        ${SOURCES}
        )
 
-pico_set_linker_script(${MAIN_NAME} ${CMAKE_CURRENT_SOURCE_DIR}/memmap.ld)
+pico_set_linker_script(${MAIN_NAME} ${CMAKE_CURRENT_SOURCE_DIR}/cmake/memmap.ld)
 
-# target_compile_options(${MAIN_NAME} PRIVATE -g)
+# Add memory usage reporting and dead code elimination
+target_link_options(${MAIN_NAME} PRIVATE
+    "-Wl,--gc-sections"
+    "-Wl,--print-memory-usage"
+)
 
 target_compile_definitions(${MAIN_NAME} PRIVATE
        ${DEFINES}

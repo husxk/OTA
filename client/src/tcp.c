@@ -6,9 +6,15 @@
 #include "lwip/ip_addr.h"
 
 #include "pico/cyw43_arch.h"
+#include "hardware/flash.h"
+#include "hardware/sync.h"
+#include "pico/bootrom.h"
+#include "hardware/watchdog.h"
+#include "hardware/structs/watchdog.h"
 
 #include "libota/packet.h"
 #include "libota/protocol.h"
+#include "libota/ota.h"
 
 int
 tcp_init_client(device_ctx_t* ctx)
@@ -17,6 +23,9 @@ tcp_init_client(device_ctx_t* ctx)
   ctx->tcp.recv_len = 0;
   ctx->tcp.connected = false;
   ctx->tcp.last_reconnect_attempt = 0;
+
+  ctx->ota.ota_addr = OTA_STORAGE_START;
+  ctx->ota.current_page = 0;
 
   // Try to connect, but don't fail if it doesn't work immediately
   // The reconnection logic in tcp_work() will handle retries
@@ -98,15 +107,34 @@ send_nack_packet(struct tcp_pcb* tpcb)
 static void
 handle_data_packet(device_ctx_t* ctx, struct tcp_pcb* tpcb, const uint8_t* buffer, size_t size)
 {
-  if (validate_data_packet(buffer, size))
+  if (!validate_data_packet(buffer, size))
   {
-    send_ack_packet(tpcb);
-  }
-  else
-  {
+    DEBUG("OTA: Invalid packet, resetting flash offset and sending NACK\n");
+    ota_reset_flash_offset(ctx);
     send_nack_packet(tpcb);
+    return;
   }
+
+  const uint8_t* payload = OTA_packet_get_data(buffer, size);
+  if (payload == NULL)
+  {
+    DEBUG("OTA: Failed to extract payload, resetting flash offset and sending NACK\n");
+    ota_reset_flash_offset(ctx);
+    send_nack_packet(tpcb);
+    return;
+  }
+
+  if (!ota_write_packet_to_flash(ctx, payload, OTA_DATA_PAYLOAD_SIZE))
+  {
+    DEBUG("OTA: Failed to write packet to flash, resetting flash offset and sending NACK\n");
+    ota_reset_flash_offset(ctx);
+    send_nack_packet(tpcb);
+    return;
+  }
+
+  send_ack_packet(tpcb);
 }
+
 
 static void
 packet_handler(device_ctx_t* ctx, struct tcp_pcb* tpcb)
@@ -135,6 +163,24 @@ packet_handler(device_ctx_t* ctx, struct tcp_pcb* tpcb)
 
     case OTA_NACK_TYPE:
       DEBUG("TCP: Received NACK packet\n");
+      break;
+
+    case OTA_FIN_TYPE:
+      DEBUG("TCP: Received FIN packet - file transfer complete!\n"
+            "TCP: Total bytes written to flash: %u\n",
+            ctx->ota.ota_addr - OTA_STORAGE_START);
+
+      send_ack_packet(tpcb);
+
+      // Force lwIP to send the ACK packet immediately
+      tcp_output(tpcb);
+
+      // Set up update timeout for 1 second from now
+      // This allows the device to send ACK and prepare before update
+      ctx->update_pending = true;
+      ctx->update_timeout = make_timeout_time_ms(1000);
+
+      DEBUG("TCP: Update scheduled for 1 second from now\n");
       break;
 
     case OTA_INVALID_TYPE:
@@ -339,3 +385,52 @@ tcp_send_data(device_ctx_t* ctx, const char* data, size_t len)
 
   return err == ERR_OK;
 }
+
+bool
+ota_write_packet_to_flash(device_ctx_t* ctx, const uint8_t* data, size_t size)
+{
+  // Check if we would overflow the OTA storage
+  if (ctx->ota.ota_addr + size > OTA_STORAGE_END)
+  {
+    DEBUG("OTA: Would overflow OTA storage (offset: %u, size: %zu, max: %u)\n",
+          ctx->ota.ota_addr, size, OTA_STORAGE_SIZE);
+    return false;
+  }
+
+  // Check if we need to erase a new sector (4096 bytes)
+  if ((ctx->ota.ota_addr % FLASH_SECTOR_SIZE) == 0)
+  {
+    DEBUG("OTA: Erasing flash sector at 0x%08X\n", ctx->ota.ota_addr);
+
+    const uint32_t ints = save_and_disable_interrupts();
+    flash_range_erase(ctx->ota.ota_addr - XIP_BASE, FLASH_SECTOR_SIZE);
+    restore_interrupts(ints);
+  }
+
+  // Write data to flash (must be 256-byte aligned and multiple of 256 bytes)
+  DEBUG("OTA: Writing %zu bytes to flash at 0x%08X (page: %u)\n",
+        size, ctx->ota.ota_addr, ctx->ota.current_page);
+
+  const uint32_t ints = save_and_disable_interrupts();
+  flash_range_program(ctx->ota.ota_addr - XIP_BASE, data, size);
+  restore_interrupts(ints);
+
+  // Update offsets
+  ctx->ota.ota_addr += size;
+  ctx->ota.current_page++;
+
+  DEBUG("OTA: Written packet, address: %u, page: %u\n",
+        ctx->ota.ota_addr,
+        ctx->ota.current_page);
+
+  return true;
+}
+
+void
+ota_reset_flash_offset(device_ctx_t* ctx)
+{
+  ctx->ota.ota_addr = OTA_STORAGE_START;
+  ctx->ota.current_page = 0;
+  DEBUG("OTA: Reset flash offsets to 0\n");
+}
+

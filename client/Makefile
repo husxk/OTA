@@ -43,5 +43,6 @@ term:
 
 clean:
 	rm -rf build/
+	rm cmake/memmap.ld
 
 .PHONY: ninja flash term clean pico_sdk
