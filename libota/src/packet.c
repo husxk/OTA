@@ -1,5 +1,6 @@
 #include "packet.h"
 #include "platform.h"
+#include "ota.h"
 
 #include <string.h>
 
@@ -135,4 +136,62 @@ const uint8_t* OTA_packet_get_data(const uint8_t* buffer, size_t size)
     }
 
     return &buffer[OTA_COMMON_PACKET_LENGTH];
+}
+
+static void send_ack_packet(ota_config_t* config, void* ctx)
+{
+    uint8_t ack_buffer[OTA_ACK_PACKET_LENGTH];
+    size_t ack_size = OTA_packet_write_ack(ack_buffer, sizeof(ack_buffer));
+    if (ack_size > 0)
+    {
+        config->transfer_send_data_cb(ctx, ack_buffer, ack_size);
+    }
+}
+
+static void send_nack_packet(ota_config_t* config, void* ctx)
+{
+    uint8_t nack_buffer[OTA_NACK_PACKET_LENGTH];
+    size_t nack_size = OTA_packet_write_nack(nack_buffer, sizeof(nack_buffer));
+    if (nack_size > 0)
+    {
+        config->transfer_send_data_cb(ctx, nack_buffer, nack_size);
+    }
+}
+
+bool OTA_handle_data_packet(ota_config_t* config,
+                            void* ctx,
+                            const uint8_t* buffer,
+                            size_t size)
+{
+    if (!config ||
+        !config->transfer_write_data_cb ||
+        !config->transfer_reset_offset_cb ||
+        !config->transfer_send_data_cb ||
+        !config->transfer_on_error_cb)
+    {
+        return false;
+    }
+
+    // Validate the packet
+    const uint8_t* payload = OTA_packet_get_data(buffer, size);
+    if (payload == NULL)
+    {
+        config->transfer_on_error_cb(ctx, "Invalid packet format");
+        config->transfer_reset_offset_cb(ctx);
+        send_nack_packet(config, ctx);
+        return false;
+    }
+
+    // Write data to storage
+    if (!config->transfer_write_data_cb(ctx, payload, OTA_DATA_PAYLOAD_SIZE))
+    {
+        config->transfer_on_error_cb(ctx, "Failed to write data to storage");
+        config->transfer_reset_offset_cb(ctx);
+        send_nack_packet(config, ctx);
+        return false;
+    }
+
+    // Success, send ACK
+    send_ack_packet(config, ctx);
+    return true;
 }

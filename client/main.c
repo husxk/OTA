@@ -41,6 +41,7 @@ init_leds(void)
   // Initialize GPIO pins for LEDs
   gpio_init(13);
   gpio_init(15);
+
   gpio_set_dir(13, GPIO_OUT);
   gpio_set_dir(15, GPIO_OUT);
 

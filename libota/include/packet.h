@@ -9,6 +9,7 @@
 
 #include "protocol.h"
 #include "platform.h"
+#include "ota.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -29,6 +30,11 @@ size_t OTA_packet_write_data(uint8_t* buffer, size_t size, const uint8_t* data, 
 uint8_t OTA_packet_get_type(const uint8_t* buffer, size_t size);
 
 const uint8_t* OTA_packet_get_data(const uint8_t* buffer, size_t size);
+
+bool OTA_handle_data_packet(ota_config_t* config,
+                            void* ctx,
+                            const uint8_t* buffer,
+                            size_t size);
 
 #ifdef __cplusplus
 }

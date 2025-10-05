@@ -1,6 +1,8 @@
 #include "tcp.h"
 #include "debug.h"
 
+#include <stdarg.h>
+
 #include "lwip/pbuf.h"
 #include "lwip/tcp.h"
 #include "lwip/ip_addr.h"
@@ -16,24 +18,6 @@
 #include "libota/protocol.h"
 #include "libota/ota.h"
 
-int
-tcp_init_client(device_ctx_t* ctx)
-{
-  ctx->tcp.client_pcb = NULL;
-  ctx->tcp.recv_len = 0;
-  ctx->tcp.connected = false;
-  ctx->tcp.last_reconnect_attempt = 0;
-
-  ctx->ota.ota_addr = OTA_STORAGE_START;
-  ctx->ota.current_page = 0;
-
-  // Try to connect, but don't fail if it doesn't work immediately
-  // The reconnection logic in tcp_work() will handle retries
-  tcp_connect_to_server(ctx);
-
-  return 0;
-}
-
 static err_t
 tcp_client_write(struct tcp_pcb* tpcb, const uint8_t *data, uint16_t size)
 {
@@ -47,95 +31,6 @@ log_data_packet(const uint8_t* payload)
   MEMDUMP(payload, OTA_DATA_PAYLOAD_SIZE);
 }
 
-static bool
-validate_data_packet(const uint8_t* buffer, size_t size)
-{
-  const uint8_t* payload = OTA_packet_get_data(buffer, size);
-
-  if (payload != NULL)
-  {
-    log_data_packet(payload);
-    return true;
-  }
-  else
-  {
-    DEBUG("TCP: Invalid DATA packet\n");
-    return false;
-  }
-}
-
-static void
-send_ack_packet(struct tcp_pcb* tpcb)
-{
-  uint8_t ack_buffer[OTA_ACK_PACKET_LENGTH];
-  size_t ack_size = OTA_packet_write_ack(ack_buffer, sizeof(ack_buffer));
-
-  if (ack_size > 0)
-  {
-    err_t err = tcp_client_write(tpcb, ack_buffer, ack_size);
-    if (err == ERR_OK)
-    {
-      DEBUG("TCP: Sent ACK\n");
-    }
-    else
-    {
-      DEBUG("TCP: Failed to send ACK\n");
-    }
-  }
-}
-
-static void
-send_nack_packet(struct tcp_pcb* tpcb)
-{
-  uint8_t nack_buffer[OTA_NACK_PACKET_LENGTH];
-  size_t nack_size = OTA_packet_write_nack(nack_buffer, sizeof(nack_buffer));
-
-  if (nack_size > 0)
-  {
-    err_t err = tcp_client_write(tpcb, nack_buffer, nack_size);
-    if (err == ERR_OK)
-    {
-      DEBUG("TCP: Sent NACK\n");
-    }
-    else
-    {
-      DEBUG("TCP: Failed to send NACK\n");
-    }
-  }
-}
-
-static void
-handle_data_packet(device_ctx_t* ctx, struct tcp_pcb* tpcb, const uint8_t* buffer, size_t size)
-{
-  if (!validate_data_packet(buffer, size))
-  {
-    DEBUG("OTA: Invalid packet, resetting flash offset and sending NACK\n");
-    ota_reset_flash_offset(ctx);
-    send_nack_packet(tpcb);
-    return;
-  }
-
-  const uint8_t* payload = OTA_packet_get_data(buffer, size);
-  if (payload == NULL)
-  {
-    DEBUG("OTA: Failed to extract payload, resetting flash offset and sending NACK\n");
-    ota_reset_flash_offset(ctx);
-    send_nack_packet(tpcb);
-    return;
-  }
-
-  if (!ota_write_packet_to_flash(ctx, payload, OTA_DATA_PAYLOAD_SIZE))
-  {
-    DEBUG("OTA: Failed to write packet to flash, resetting flash offset and sending NACK\n");
-    ota_reset_flash_offset(ctx);
-    send_nack_packet(tpcb);
-    return;
-  }
-
-  send_ack_packet(tpcb);
-}
-
-
 static void
 packet_handler(device_ctx_t* ctx, struct tcp_pcb* tpcb)
 {
@@ -148,47 +43,8 @@ packet_handler(device_ctx_t* ctx, struct tcp_pcb* tpcb)
     return;
   }
 
-  // Parse OTA packet
-  uint8_t packet_type = OTA_packet_get_type(buffer, total_len);
-
-  switch (packet_type)
-  {
-    case OTA_DATA_TYPE:
-      handle_data_packet(ctx, tpcb, buffer, total_len);
-      break;
-
-    case OTA_ACK_TYPE:
-      DEBUG("TCP: Received ACK packet\n");
-      break;
-
-    case OTA_NACK_TYPE:
-      DEBUG("TCP: Received NACK packet\n");
-      break;
-
-    case OTA_FIN_TYPE:
-      DEBUG("TCP: Received FIN packet - file transfer complete!\n"
-            "TCP: Total bytes written to flash: %u\n",
-            ctx->ota.ota_addr - OTA_STORAGE_START);
-
-      send_ack_packet(tpcb);
-
-      // Force lwIP to send the ACK packet immediately
-      tcp_output(tpcb);
-
-      // Set up update timeout for 1 second from now
-      // This allows the device to send ACK and prepare before update
-      ctx->update_pending = true;
-      ctx->update_timeout = make_timeout_time_ms(1000);
-
-      DEBUG("TCP: Update scheduled for 1 second from now\n");
-      break;
-
-    case OTA_INVALID_TYPE:
-    default:
-      DEBUG("TCP: Received invalid packet (type: 0x%02X)\n", packet_type);
-      send_nack_packet(tpcb);
-      break;
-  }
+  // Use libota to handle the data
+  OTA_handle_data(&ctx->ota_ctx, ctx, buffer, total_len);
 
   // Reset buffer for next packet
   ctx->tcp.recv_len = 0;
@@ -225,6 +81,10 @@ tcp_client_close(device_ctx_t* ctx)
   }
 
   ctx->tcp.connected = false;
+
+//  ctx->tcp.recv_len = 0;
+//  ctx->tcp.last_reconnect_attempt = 0;
+
   return err;
 }
 
@@ -351,6 +211,16 @@ tcp_connect_to_server(device_ctx_t* ctx)
 void
 tcp_work(device_ctx_t* ctx)
 {
+//  if (ctx->update_pending)
+//  {
+//    if (tcp_is_conn_active(ctx))
+//    {
+//      tcp_client_close(ctx);
+//    }
+//
+//    return;
+//  }
+
   cyw43_arch_poll();
 
   // If disconnected, try to reconnect
@@ -419,18 +289,112 @@ ota_write_packet_to_flash(device_ctx_t* ctx, const uint8_t* data, size_t size)
   ctx->ota.ota_addr += size;
   ctx->ota.current_page++;
 
-  DEBUG("OTA: Written packet, address: %u, page: %u\n",
+  DEBUG("OTA: Written packet, address: 0x%08X, page: %u\n",
         ctx->ota.ota_addr,
         ctx->ota.current_page);
 
   return true;
 }
 
-void
-ota_reset_flash_offset(device_ctx_t* ctx)
+// Transfer callback implementations
+static bool transfer_write_data_cb(void* ctx, const uint8_t* data, size_t size)
 {
+  device_ctx_t* device_ctx = (device_ctx_t*)ctx;
+
+  log_data_packet(data);
+  return ota_write_packet_to_flash(device_ctx, data, size);
+}
+
+static void transfer_reset_offset_cb(void* ctx)
+{
+  device_ctx_t* device_ctx = (device_ctx_t*)ctx;
+
+  device_ctx->ota.ota_addr = OTA_STORAGE_START;
+  device_ctx->ota.current_page = 0;
+
+  DEBUG("OTA: Reset flash offsets to 0\n");
+
+}
+
+static void transfer_send_data_cb(void* ctx, const uint8_t* data, size_t size)
+{
+  device_ctx_t* device_ctx = (device_ctx_t*)ctx;
+  if (device_ctx->tcp.client_pcb != NULL)
+  {
+    err_t err = tcp_client_write(device_ctx->tcp.client_pcb,
+                                 data, size);
+
+    if (err == ERR_OK)
+    {
+      DEBUG("TCP: Sent %zu bytes\n", size);
+    }
+    else
+    {
+      DEBUG("TCP: Failed to send %zu bytes\n", size);
+    }
+  }
+}
+
+static void transfer_on_error_cb(void* ctx, const char* error_msg)
+{
+  DEBUG("OTA: Transfer error: %s\n", error_msg);
+}
+
+static void transfer_complete_cb(void* ctx, uint32_t total_bytes)
+{
+  device_ctx_t* device_ctx = (device_ctx_t*)ctx;
+
+  DEBUG("OTA: Total bytes written to flash: %u\n", total_bytes);
+
+  // Set up update timeout for 1 second from now
+  // This allows the device to send ACK and prepare before update
+  device_ctx->update_pending = true;
+  device_ctx->update_timeout = make_timeout_time_ms(1000);
+
+  DEBUG("OTA: Update scheduled for 1 second from now\n");
+}
+
+// Debug callback
+#ifdef DEBUG_LOGS
+static void debug_log_cb(void* ctx, const char* format, ...)
+{
+  // Use vprintf directly - this is what DEBUG macro expands to
+  va_list args;
+  va_start(args, format);
+  vprintf(format, args);
+  va_end(args);
+}
+#endif
+
+int
+tcp_init_client(device_ctx_t* ctx)
+{
+  ctx->tcp.client_pcb = NULL;
+  ctx->tcp.recv_len = 0;
+  ctx->tcp.connected = false;
+  ctx->tcp.last_reconnect_attempt = 0;
+
   ctx->ota.ota_addr = OTA_STORAGE_START;
   ctx->ota.current_page = 0;
-  DEBUG("OTA: Reset flash offsets to 0\n");
+
+  // Set up transfer callbacks
+  ctx->ota_ctx.transfer_write_data_cb = transfer_write_data_cb;
+  ctx->ota_ctx.transfer_reset_offset_cb = transfer_reset_offset_cb;
+  ctx->ota_ctx.transfer_send_data_cb = transfer_send_data_cb;
+  ctx->ota_ctx.transfer_on_error_cb = transfer_on_error_cb;
+  ctx->ota_ctx.transfer_complete_cb = transfer_complete_cb;
+
+  // Debug callbacks
+#ifdef DEBUG_LOGS
+  ctx->ota_ctx.debug_log_cb = debug_log_cb;
+#else
+  ctx->ota_ctx.debug_log_cb = NULL;
+#endif
+
+  // Try to connect, but don't fail if it doesn't work immediately
+  // The reconnection logic in tcp_work() will handle retries
+  tcp_connect_to_server(ctx);
+
+  return 0;
 }
 

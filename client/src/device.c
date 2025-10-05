@@ -73,10 +73,13 @@ static void OTA_RAM_FUNCTION(ota_write_flash_cb)(void* ctx,
 static void
 init_set_ota_ctx(device_ctx_t* ctx)
 {
-  ctx->ota_ctx.reboot_cb = ota_reboot_cb;
-  ctx->ota_ctx.get_data_cb = ota_get_data_cb;
-  ctx->ota_ctx.pre_write_cb = ota_pre_write_cb;
-  ctx->ota_ctx.write_flash_cb = ota_write_flash_cb;
+  // Firmware update callbacks
+  ctx->ota_ctx.firmware_reboot_cb = ota_reboot_cb;
+  ctx->ota_ctx.firmware_get_data_cb = ota_get_data_cb;
+  ctx->ota_ctx.firmware_pre_write_cb = ota_pre_write_cb;
+  ctx->ota_ctx.firmware_write_flash_cb = ota_write_flash_cb;
+
+  // Transfer callbacks will be set in tcp_init_client()
 }
 
 int
