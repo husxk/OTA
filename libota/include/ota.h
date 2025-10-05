@@ -20,20 +20,49 @@ typedef struct
 
 typedef struct
 {
-    void (*reboot_cb)(void); // called after flash update to reboot device
+    // Firmware update callbacks
+    // Firmware callbacks needs to be in RAM in runtime
 
-    void (*get_data_cb)(void* ctx,
-                        uint32_t current_addr,
-                        const uint8_t** data,
-                        size_t* size); // called to get data for OTA buffer
+    // called after flash update to reboot device
+    void (*firmware_reboot_cb)(void);
 
-    void (*pre_write_cb)(void* ctx); // called before starting firmware write
-                                     // (e.g., to disable interrupts)
+    // called to get data for OTA buffer
+    void (*firmware_get_data_cb)(void* ctx,
+                                 uint32_t current_addr,
+                                 const uint8_t** data,
+                                 size_t* size);
 
-    void (*write_flash_cb)(void* ctx,
-                           uint32_t flash_addr,
-                           const uint8_t* data,
-                           size_t size); // called to write data to flash
+    // called before starting firmware write
+    // (e.g., to disable interrupts)
+    void (*firmware_pre_write_cb)(void* ctx);
+
+    // called to write data to flash
+    void (*firmware_write_flash_cb)(void* ctx,
+                                    uint32_t flash_addr,
+                                    const uint8_t* data,
+                                    size_t size);
+
+    // Transfer callbacks
+
+    // called to write received
+    // data to storage
+    bool (*transfer_write_data_cb)(void* ctx, const uint8_t* data, size_t size);
+
+    // called to reset transfer offset/position
+    void (*transfer_reset_offset_cb)(void* ctx);
+
+    // called to send data to sender
+    void (*transfer_send_data_cb)(void* ctx, const uint8_t* data, size_t size);
+
+    // called when transfer error occurs
+    void (*transfer_on_error_cb)(void* ctx, const char* error_msg);
+
+    // called when FIN packet is received (transfer complete)
+    void (*transfer_complete_cb)(void* ctx, uint32_t total_bytes);
+
+    // Debug/Logging callbacks
+    // called to log debug messages
+    void (*debug_log_cb)(void* ctx, const char* format, ...);
 
     ota_memory_t memory;  // Memory configuration
 } ota_config_t;
@@ -46,6 +75,11 @@ void OTA_setup_memory(ota_config_t* config,
                       uint32_t flash_start);
 
 bool OTA_RAM_FUNCTION(OTA_write_firmware)(ota_config_t* config, void* ctx);
+
+bool OTA_handle_data(ota_config_t* config,
+                     void* ctx,
+                     const uint8_t* buffer,
+                     size_t size);
 
 #ifdef __cplusplus
 }
