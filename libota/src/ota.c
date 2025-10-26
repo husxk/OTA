@@ -77,6 +77,140 @@ bool OTA_RAM_FUNCTION(OTA_write_firmware)(ota_config_t* config, void* ctx)
     return true;
 }
 
+static bool ota_send_fin_packet(ota_config_t* config, void* ctx)
+{
+    uint8_t fin_buffer[OTA_FIN_PACKET_LENGTH];
+    size_t fin_size = OTA_packet_write_fin(fin_buffer, sizeof(fin_buffer));
+    
+    if (fin_size == 0)
+    {
+        config->transfer_on_error_cb(ctx, "Failed to create FIN packet");
+        return false;
+    }
+
+    config->transfer_send_data_cb(ctx, fin_buffer, fin_size);
+    ota_debug_log(config, ctx, "OTA: FIN packet sent\n");
+    return true;
+}
+
+static bool ota_send_data_packet(ota_config_t* config, void* ctx, const uint8_t* data, size_t size)
+{
+    uint8_t send_buffer[OTA_DATA_PACKET_LENGTH];
+    size_t bytes_written = OTA_packet_write_data(send_buffer, sizeof(send_buffer), data, size);
+
+    if (bytes_written == 0)
+    {
+        config->transfer_on_error_cb(ctx, "Failed to create DATA packet");
+        return false;
+    }
+
+    config->transfer_send_data_cb(ctx, send_buffer, bytes_written);
+    ota_debug_log(config, ctx, "OTA: DATA packet sent (%zu bytes)\n", size);
+    return true;
+}
+
+static bool ota_wait_for_response(ota_config_t* config, void* ctx, uint8_t expected_type)
+{
+    uint8_t response_buffer[OTA_COMMON_PACKET_LENGTH];
+    size_t response_size = config->transfer_receive_data_cb(ctx, response_buffer, sizeof(response_buffer));
+
+    if (response_size == 0)
+    {
+        config->transfer_on_error_cb(ctx, "No response received");
+        return false;
+    }
+
+    uint8_t packet_type = OTA_packet_get_type(response_buffer, response_size);
+    
+    if (packet_type != expected_type)
+    {
+        if (packet_type == OTA_NACK_TYPE)
+        {
+            config->transfer_on_error_cb(ctx, "Received NACK");
+        }
+        else
+        {
+            config->transfer_on_error_cb(ctx, "Invalid response");
+        }
+
+        return false;
+    }
+
+    ota_debug_log(config, ctx, "OTA: Received ACK\n");
+
+    return true;
+}
+
+bool OTA_run_server_transfer(ota_config_t* config, void* ctx)
+{
+    if (!config || !ctx)
+    {
+        return false;
+    }
+
+    // Validate required server callbacks
+    if (!config->server_get_payload_cb ||
+        !config->transfer_send_data_cb ||
+        !config->transfer_receive_data_cb ||
+        !config->transfer_on_error_cb ||
+        !config->transfer_complete_cb ||
+        !config->server_transfer_progress_cb)
+    {
+        ota_debug_log(config, ctx, "OTA: Missing required server callbacks\n");
+        return false;
+    }
+
+    ota_debug_log(config, ctx, "OTA: Starting server file transfer\n");
+
+    uint32_t packet_number = 1;
+    uint32_t total_bytes_sent = 0;
+
+    while (true)
+    {
+        const uint8_t* data;
+        size_t size;
+        
+        if (!config->server_get_payload_cb(ctx, &data, &size))
+        {
+            // No more data, send FIN packet
+            ota_debug_log(config, ctx, "OTA: No more data, sending FIN packet\n");
+            
+            if (!ota_send_fin_packet(config, ctx))
+            {
+                return false;
+            }
+            
+            if (!ota_wait_for_response(config, ctx, OTA_ACK_TYPE))
+            {
+                return false;
+            }
+
+            break;
+        }
+
+        if (!ota_send_data_packet(config, ctx, data, size))
+        {
+            return false;
+        }
+
+        if (!ota_wait_for_response(config, ctx, OTA_ACK_TYPE))
+        {
+            return false;
+        }
+
+        total_bytes_sent += size;
+        config->server_transfer_progress_cb(ctx, total_bytes_sent, packet_number);
+
+        packet_number++;
+    }
+
+    // Transfer completed successfully
+    ota_debug_log(config, ctx, "OTA: File transfer completed successfully\n");
+    config->transfer_complete_cb(ctx, total_bytes_sent);
+    
+    return true;
+}
+
 bool OTA_handle_data(ota_config_t* config,
                      void* ctx,
                      const uint8_t* buffer,

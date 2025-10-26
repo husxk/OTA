@@ -44,15 +44,11 @@ typedef struct
 
     // Transfer callbacks
 
-    // called to write received
-    // data to storage
-    bool (*transfer_write_data_cb)(void* ctx, const uint8_t* data, size_t size);
-
-    // called to reset transfer offset/position
-    void (*transfer_reset_offset_cb)(void* ctx);
-
     // called to send data to sender
     void (*transfer_send_data_cb)(void* ctx, const uint8_t* data, size_t size);
+
+    // called to receive data from network
+    size_t (*transfer_receive_data_cb)(void* ctx, uint8_t* buffer, size_t max_size);
 
     // called when transfer error occurs
     void (*transfer_on_error_cb)(void* ctx, const char* error_msg);
@@ -63,6 +59,15 @@ typedef struct
     // Debug/Logging callbacks
     // called to log debug messages
     void (*debug_log_cb)(void* ctx, const char* format, ...);
+
+    // Server-specific callbacks
+    // called to get payload data for sending
+    bool (*server_get_payload_cb)(void* ctx,
+                                  const uint8_t** data,
+                                  size_t* size);
+
+    // called after successful DATA-ACK exchange
+    void (*server_transfer_progress_cb)(void* ctx, uint32_t bytes_sent, uint32_t packet_number);
 
     ota_memory_t memory;  // Memory configuration
 } ota_config_t;
@@ -80,6 +85,8 @@ bool OTA_handle_data(ota_config_t* config,
                      void* ctx,
                      const uint8_t* buffer,
                      size_t size);
+
+bool OTA_run_server_transfer(ota_config_t* config, void* ctx);
 
 #ifdef __cplusplus
 }
