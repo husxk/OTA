@@ -1,6 +1,6 @@
 #include "packet.h"
 #include "platform.h"
-#include "ota.h"
+#include "ota_client.h"
 
 #include <string.h>
 
@@ -94,7 +94,10 @@ uint8_t OTA_packet_get_type(const uint8_t* buffer, size_t size)
     }
 }
 
-size_t OTA_packet_write_data(uint8_t* buffer, size_t size, const uint8_t* data, size_t data_size)
+size_t OTA_packet_write_data(uint8_t* buffer,
+                              size_t size,
+                              const uint8_t* data,
+                              size_t data_size)
 {
     if (!buffer || !data || size < OTA_DATA_PACKET_LENGTH)
     {
@@ -138,36 +141,36 @@ const uint8_t* OTA_packet_get_data(const uint8_t* buffer, size_t size)
     return &buffer[OTA_COMMON_PACKET_LENGTH];
 }
 
-static void send_ack_packet(ota_config_t* config, void* ctx)
+static void send_ack_packet_client(OTA_client_ctx* ctx, void* user_ctx)
 {
     uint8_t ack_buffer[OTA_ACK_PACKET_LENGTH];
     size_t ack_size = OTA_packet_write_ack(ack_buffer, sizeof(ack_buffer));
     if (ack_size > 0)
     {
-        config->transfer_send_data_cb(ctx, ack_buffer, ack_size);
+        ctx->transfer_send_cb(user_ctx, ack_buffer, ack_size);
     }
 }
 
-static void send_nack_packet(ota_config_t* config, void* ctx)
+static void send_nack_packet_client(OTA_client_ctx* ctx, void* user_ctx)
 {
     uint8_t nack_buffer[OTA_NACK_PACKET_LENGTH];
     size_t nack_size = OTA_packet_write_nack(nack_buffer, sizeof(nack_buffer));
     if (nack_size > 0)
     {
-        config->transfer_send_data_cb(ctx, nack_buffer, nack_size);
+        ctx->transfer_send_cb(user_ctx, nack_buffer, nack_size);
     }
 }
 
-bool OTA_handle_data_packet(ota_config_t* config,
-                            void* ctx,
-                            const uint8_t* buffer,
-                            size_t size)
+bool OTA_client_handle_data_packet(OTA_client_ctx* ctx,
+                                    void* user_ctx,
+                                    const uint8_t* buffer,
+                                    size_t size)
 {
-    if (!config ||
-        !config->transfer_write_data_cb ||
-        !config->transfer_reset_offset_cb ||
-        !config->transfer_send_data_cb ||
-        !config->transfer_on_error_cb)
+    if (!ctx ||
+        !ctx->transfer_store_cb ||
+        !ctx->transfer_reset_cb ||
+        !ctx->transfer_send_cb  ||
+        !ctx->transfer_error_cb)
     {
         return false;
     }
@@ -176,22 +179,22 @@ bool OTA_handle_data_packet(ota_config_t* config,
     const uint8_t* payload = OTA_packet_get_data(buffer, size);
     if (payload == NULL)
     {
-        config->transfer_on_error_cb(ctx, "Invalid packet format");
-        config->transfer_reset_offset_cb(ctx);
-        send_nack_packet(config, ctx);
+        ctx->transfer_error_cb(user_ctx, "Invalid packet format");
+        ctx->transfer_reset_cb(user_ctx);
+        send_nack_packet_client(ctx, user_ctx);
         return false;
     }
 
     // Write data to storage
-    if (!config->transfer_write_data_cb(ctx, payload, OTA_DATA_PAYLOAD_SIZE))
+    if (!ctx->transfer_store_cb(user_ctx, payload, OTA_DATA_PAYLOAD_SIZE))
     {
-        config->transfer_on_error_cb(ctx, "Failed to write data to storage");
-        config->transfer_reset_offset_cb(ctx);
-        send_nack_packet(config, ctx);
+        ctx->transfer_error_cb(user_ctx, "Failed to write data to storage");
+        ctx->transfer_reset_cb(user_ctx);
+        send_nack_packet_client(ctx, user_ctx);
         return false;
     }
 
     // Success, send ACK
-    send_ack_packet(config, ctx);
+    send_ack_packet_client(ctx, user_ctx);
     return true;
 }
