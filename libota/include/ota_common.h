@@ -8,7 +8,6 @@
 extern "C" {
 #endif
 
-// Common transfer callbacks shared between client and server
 typedef struct
 {
     // Network transfer callbacks
@@ -36,13 +35,16 @@ typedef struct
 
 } OTA_common_callbacks_t;
 
-// Common OTA context structure
 typedef struct
 {
-    // Common callbacks
     OTA_common_callbacks_t callbacks;
 
 } OTA_common_ctx_t;
+
+void OTA_debug_log(OTA_common_ctx_t* common_ctx,
+                   void* user_ctx,
+                   const char* format,
+                   ...);
 
 #ifdef __cplusplus
 }

@@ -15,25 +15,6 @@ void OTA_RAM_FUNCTION(OTA_memcpy_ram)(void* dest, const void* src, size_t n)
   }
 }
 
-static void ota_debug_log_client(OTA_client_ctx* ctx,
-                                  void* user_ctx,
-                                  const char* format,
-                                  ...)
-{
-    if (!ctx ||
-        !ctx->common.callbacks.debug_log_cb)
-    {
-        return;
-    }
-
-    va_list args;
-    va_start(args, format);
-
-    ctx->common.callbacks.debug_log_cb(user_ctx, format, args);
-
-    va_end(args);
-}
-
 void OTA_client_setup_memory(OTA_client_ctx* ctx,
                              uint32_t ota_storage_start,
                              uint32_t ota_storage_end,
@@ -133,7 +114,7 @@ bool OTA_client_handle_data(OTA_client_ctx* ctx,
         !buffer ||
         size == 0)
     {
-        ota_debug_log_client(ctx, user_ctx,
+        OTA_debug_log(&ctx->common, user_ctx,
                              "OTA: Received empty or invalid packet\n");
         return false;
     }
@@ -146,7 +127,7 @@ bool OTA_client_handle_data(OTA_client_ctx* ctx,
         !ctx->common.callbacks.transfer_error_cb ||
         !ctx->common.callbacks.transfer_done_cb)
     {
-        ota_debug_log_client(ctx, user_ctx,
+        OTA_debug_log(&ctx->common, user_ctx,
                              "OTA: Missing required callbacks\n");
         return false;
     }
@@ -157,22 +138,22 @@ bool OTA_client_handle_data(OTA_client_ctx* ctx,
     switch (packet_type)
     {
         case OTA_DATA_TYPE:
-            ota_debug_log_client(ctx, user_ctx, "OTA: Received DATA packet\n");
+            OTA_debug_log(&ctx->common, user_ctx, "OTA: Received DATA packet\n");
 
             return ota_client_handle_data_packet(ctx, user_ctx, buffer, size);
 
         case OTA_ACK_TYPE:
-            ota_debug_log_client(ctx, user_ctx, "OTA: Received ACK packet\n");
+            OTA_debug_log(&ctx->common, user_ctx, "OTA: Received ACK packet\n");
 
             return true;
 
         case OTA_NACK_TYPE:
-            ota_debug_log_client(ctx, user_ctx, "OTA: Received NACK packet\n");
+            OTA_debug_log(&ctx->common, user_ctx, "OTA: Received NACK packet\n");
 
             return true;
 
         case OTA_FIN_TYPE:
-            ota_debug_log_client(ctx, user_ctx,
+            OTA_debug_log(&ctx->common, user_ctx,
                                 "OTA: Received FIN packet, file transfer complete!\n");
 
             // Send ACK for FIN packet
@@ -189,7 +170,7 @@ bool OTA_client_handle_data(OTA_client_ctx* ctx,
 
         case OTA_INVALID_TYPE:
         default:
-            ota_debug_log_client(ctx, user_ctx,
+            OTA_debug_log(&ctx->common, user_ctx,
                                "OTA: Received invalid packet (type: 0x%02X)\n",
                                packet_type);
 
