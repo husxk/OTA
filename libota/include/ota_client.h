@@ -12,7 +12,6 @@
 extern "C" {
 #endif
 
-// Client-specific memory configuration structure
 typedef struct
 {
     uint32_t ota_storage_start;  // Start address of OTA storage area
@@ -23,11 +22,8 @@ typedef struct
 // Client context structure
 typedef struct
 {
-    // Common OTA context (includes common callbacks)
     OTA_common_ctx_t common;
-
-    // Client-specific memory configuration
-    OTA_memory_t memory;
+    OTA_memory_t     memory;
 
     // Firmware update callbacks (must be in RAM)
     // Performs system reboot after successful firmware update
@@ -70,8 +66,6 @@ void OTA_client_setup_memory(OTA_client_ctx* ctx,
                              uint32_t ota_storage_end,
                              uint32_t flash_start);
 
-bool OTA_RAM_FUNCTION(OTA_client_write_firmware)(OTA_client_ctx* ctx, void* user_ctx);
-
 bool OTA_client_handle_data(OTA_client_ctx* ctx,
                             void* user_ctx,
                             const uint8_t* buffer,
@@ -79,6 +73,9 @@ bool OTA_client_handle_data(OTA_client_ctx* ctx,
 
 // RAM function for memory operations
 void OTA_RAM_FUNCTION(OTA_memcpy_ram)(void* dest, const void* src, size_t n);
+
+bool OTA_RAM_FUNCTION(OTA_client_write_firmware)(OTA_client_ctx* ctx,
+                                                 void* user_ctx);
 
 #ifdef __cplusplus
 }

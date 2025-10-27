@@ -30,10 +30,9 @@ uint8_t OTA_packet_get_type(const uint8_t* buffer, size_t size);
 
 const uint8_t* OTA_packet_get_data(const uint8_t* buffer, size_t size);
 
-bool OTA_client_handle_data_packet(OTA_client_ctx* ctx,
-                                   void* user_ctx,
-                                   const uint8_t* buffer,
-                                   size_t size);
+void OTA_send_ack_packet_client(OTA_client_ctx* ctx, void* user_ctx);
+
+void OTA_send_nack_packet_client(OTA_client_ctx* ctx, void* user_ctx);
 
 #ifdef __cplusplus
 }
