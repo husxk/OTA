@@ -19,7 +19,6 @@ typedef struct
     uint32_t flash_start;        // Start address of main flash to write to
 } OTA_memory_t;
 
-// Client context structure
 typedef struct
 {
     OTA_common_ctx_t common;
@@ -58,7 +57,7 @@ typedef struct
     // Resets the transfer state (e.g., clears storage offset)
     // Called when transfer fails or needs to be restarted
     void (*transfer_reset_cb) (void* ctx);
-    
+
 } OTA_client_ctx;
 
 void OTA_client_setup_memory(OTA_client_ctx* ctx,

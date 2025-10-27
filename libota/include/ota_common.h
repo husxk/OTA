@@ -46,6 +46,12 @@ void OTA_debug_log(OTA_common_ctx_t* common_ctx,
                    const char* format,
                    ...);
 
+bool OTA_send_ack_packet(OTA_common_ctx_t* common_ctx, void* user_ctx);
+
+bool OTA_send_nack_packet(OTA_common_ctx_t* common_ctx, void* user_ctx);
+
+bool OTA_send_fin_packet(OTA_common_ctx_t* common_ctx, void* user_ctx);
+
 #ifdef __cplusplus
 }
 #endif

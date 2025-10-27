@@ -4,6 +4,19 @@
 #include "protocol.h"
 #include <stdarg.h>
 
+static void ota_client_handle_error(OTA_client_ctx* ctx,
+                                    void* user_ctx,
+                                    const char* error_message)
+{
+    ctx->common.callbacks.transfer_error_cb(user_ctx, error_message);
+    ctx->transfer_reset_cb(user_ctx);
+
+    if (!OTA_send_nack_packet(&ctx->common, user_ctx))
+    {
+        OTA_debug_log(&ctx->common, user_ctx, "OTA: Failed to send NACK packet");
+    }
+}
+
 void OTA_RAM_FUNCTION(OTA_memcpy_ram)(void* dest, const void* src, size_t n)
 {
   uint8_t* d = (uint8_t*)dest;
@@ -29,7 +42,7 @@ void OTA_client_setup_memory(OTA_client_ctx* ctx,
 }
 
 bool OTA_RAM_FUNCTION(OTA_client_write_firmware)(OTA_client_ctx* ctx,
-                                                  void* user_ctx)
+                                                 void* user_ctx)
 {
     if (!ctx                      ||
         !ctx->firmware_reboot_cb  ||
@@ -92,17 +105,13 @@ static bool ota_client_handle_data_packet(OTA_client_ctx* ctx,
     }
 
     // Success, send ACK
-    OTA_send_ack_packet_client(ctx, user_ctx);
-    return true;
-}
+    if (!OTA_send_ack_packet(&ctx->common, user_ctx))
+    {
+        OTA_debug_log(&ctx->common, user_ctx, "OTA: Failed to send ACK packet");
+        return false;
+    }
 
-static void ota_client_handle_error(OTA_client_ctx* ctx,
-                                    void* user_ctx,
-                                    const char* error_message)
-{
-    ctx->transfer_error_cb(user_ctx, error_message);
-    ctx->transfer_reset_cb(user_ctx);
-    OTA_send_nack_packet_client(ctx, user_ctx);
+    return true;
 }
 
 bool OTA_client_handle_data(OTA_client_ctx* ctx,
@@ -121,8 +130,6 @@ bool OTA_client_handle_data(OTA_client_ctx* ctx,
 
     if (!ctx->transfer_store_cb                  ||
         !ctx->transfer_reset_cb                  ||
-        !ctx->transfer_send_cb                   ||
-        !ctx->transfer_error_cb                  ||
         !ctx->common.callbacks.transfer_send_cb  ||
         !ctx->common.callbacks.transfer_error_cb ||
         !ctx->common.callbacks.transfer_done_cb)
@@ -157,7 +164,11 @@ bool OTA_client_handle_data(OTA_client_ctx* ctx,
                                 "OTA: Received FIN packet, file transfer complete!\n");
 
             // Send ACK for FIN packet
-            OTA_send_ack_packet_client(ctx, user_ctx);
+            if (!OTA_send_ack_packet(&ctx->common, user_ctx))
+            {
+                OTA_debug_log(&ctx->common, user_ctx,
+                              "OTA: Failed to send ACK for FIN packet");
+            }
 
             // Calculate total bytes transferred
             uint32_t total_bytes = ctx->memory.ota_storage_end -
@@ -175,7 +186,11 @@ bool OTA_client_handle_data(OTA_client_ctx* ctx,
                                packet_type);
 
             // Send NACK for invalid packet
-            OTA_send_nack_packet_client(ctx, user_ctx);
+            if (!OTA_send_nack_packet(&ctx->common, user_ctx))
+            {
+                OTA_debug_log(&ctx->common, user_ctx,
+                              "OTA: Failed to send NACK for invalid packet");
+            }
 
             return false;
     }

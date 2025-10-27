@@ -5,25 +5,6 @@
 
 #include <stdarg.h>
 
-static bool ota_send_fin_packet_server(OTA_server_ctx* ctx,
-                                       void* user_ctx)
-{
-    uint8_t fin_buffer[OTA_FIN_PACKET_LENGTH];
-
-    size_t fin_size = OTA_packet_write_fin(fin_buffer, sizeof(fin_buffer));
-    
-    if (fin_size == 0)
-    {
-        ctx->common.callbacks.transfer_error_cb(user_ctx,
-                                                "Failed to create FIN packet");
-        return false;
-    }
-
-    ctx->common.callbacks.transfer_send_cb(user_ctx, fin_buffer, fin_size);
-    OTA_debug_log(&ctx->common, user_ctx, "OTA: FIN packet sent\n");
-
-    return true;
-}
 
 static bool ota_send_data_packet_server(OTA_server_ctx* ctx,
                                         void* user_ctx,
@@ -32,12 +13,12 @@ static bool ota_send_data_packet_server(OTA_server_ctx* ctx,
 {
     uint8_t send_buffer[OTA_DATA_PACKET_LENGTH];
 
-    size_t bytes_written = OTA_packet_write_data(send_buffer,
-                                                 sizeof(send_buffer),
-                                                 data,
-                                                 size);
-
-    if (bytes_written == 0)
+    size_t bytes_written;
+    if (!OTA_packet_write_data(send_buffer,
+                               sizeof(send_buffer),
+                               data,
+                               size,
+                               &bytes_written))
     {
         ctx->common.callbacks.transfer_error_cb(user_ctx,
                                                 "Failed to create DATA packet");
@@ -112,7 +93,7 @@ bool OTA_server_run_transfer(OTA_server_ctx* ctx, void* user_ctx)
     OTA_debug_log(&ctx->common, user_ctx,
                   "OTA: Starting server file transfer\n");
 
-    uint32_t packet_number = 1;
+    uint32_t packet_number    = 1;
     uint32_t total_bytes_sent = 0;
 
     while (true)
@@ -126,7 +107,7 @@ bool OTA_server_run_transfer(OTA_server_ctx* ctx, void* user_ctx)
             OTA_debug_log(&ctx->common, user_ctx,
                           "OTA: No more data, sending FIN packet\n");
 
-            if (!ota_send_fin_packet_server(ctx, user_ctx))
+            if (!OTA_send_fin_packet(&ctx->common, user_ctx))
             {
                 return false;
             }
