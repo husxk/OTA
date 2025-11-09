@@ -62,7 +62,7 @@ typedef struct
     // Resets the transfer state (e.g., clears storage offset)
     // Called when transfer fails or needs to be restarted
     void (*transfer_reset_cb) (void* ctx);
-    
+
 } OTA_client_ctx;
 
 void OTA_client_setup_memory(OTA_client_ctx* ctx,
