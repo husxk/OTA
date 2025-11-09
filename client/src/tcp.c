@@ -14,9 +14,8 @@
 #include "hardware/watchdog.h"
 #include "hardware/structs/watchdog.h"
 
-#include "libota/packet.h"
-#include "libota/protocol.h"
-#include "libota/ota.h"
+#include "ota.h"
+#include "libota/ota_client.h"
 
 static err_t
 tcp_client_write(struct tcp_pcb* tpcb, const uint8_t *data, uint16_t size)
@@ -43,8 +42,8 @@ packet_handler(device_ctx_t* ctx, struct tcp_pcb* tpcb)
     return;
   }
 
-  // Use libota to handle the data
-  OTA_handle_data(&ctx->ota_ctx, ctx, buffer, total_len);
+  // Pass received buffer to OTA library
+  OTA_client_handle_data(&ctx->ota_ctx, ctx, buffer, total_len);
 
   // Reset buffer for next packet
   ctx->tcp.recv_len = 0;
@@ -256,47 +255,6 @@ tcp_send_data(device_ctx_t* ctx, const char* data, size_t len)
   return err == ERR_OK;
 }
 
-bool
-ota_write_packet_to_flash(device_ctx_t* ctx, const uint8_t* data, size_t size)
-{
-  // Check if we would overflow the OTA storage
-  if (ctx->ota.ota_addr + size > OTA_STORAGE_END)
-  {
-    DEBUG("OTA: Would overflow OTA storage (offset: %u, size: %zu, max: %u)\n",
-          ctx->ota.ota_addr, size, OTA_STORAGE_SIZE);
-    return false;
-  }
-
-  // Check if we need to erase a new sector (4096 bytes)
-  if ((ctx->ota.ota_addr % FLASH_SECTOR_SIZE) == 0)
-  {
-    DEBUG("OTA: Erasing flash sector at 0x%08X\n", ctx->ota.ota_addr);
-
-    const uint32_t ints = save_and_disable_interrupts();
-    flash_range_erase(ctx->ota.ota_addr - XIP_BASE, FLASH_SECTOR_SIZE);
-    restore_interrupts(ints);
-  }
-
-  // Write data to flash (must be 256-byte aligned and multiple of 256 bytes)
-  DEBUG("OTA: Writing %zu bytes to flash at 0x%08X (page: %u)\n",
-        size, ctx->ota.ota_addr, ctx->ota.current_page);
-
-  const uint32_t ints = save_and_disable_interrupts();
-  flash_range_program(ctx->ota.ota_addr - XIP_BASE, data, size);
-  restore_interrupts(ints);
-
-  // Update offsets
-  ctx->ota.ota_addr += size;
-  ctx->ota.current_page++;
-
-  DEBUG("OTA: Written packet, address: 0x%08X, page: %u\n",
-        ctx->ota.ota_addr,
-        ctx->ota.current_page);
-
-  return true;
-}
-
-
 int
 tcp_init_client(device_ctx_t* ctx)
 {
@@ -311,6 +269,9 @@ tcp_init_client(device_ctx_t* ctx)
   // Try to connect, but don't fail if it doesn't work immediately
   // The reconnection logic in tcp_work() will handle retries
   tcp_connect_to_server(ctx);
+
+  // now + 5 seconds
+  ctx->tcp.last_reconnect_attempt = make_timeout_time_ms(5000);
 
   return 0;
 }

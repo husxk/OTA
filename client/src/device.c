@@ -5,6 +5,7 @@
 #include "tcp.h"
 #include "debug.h"
 #include "ota.h"
+#include "libota/ota_client.h"
 
 #include "lwip/pbuf.h"
 #include "lwip/tcp.h"
@@ -70,13 +71,14 @@ check_update_timeout(device_ctx_t* ctx)
     DEBUG("OTA: Flash start: 0x%08X\n", XIP_BASE);
 
     // Set up memory pointers for OTA update
-    setup_ota_memory(&ctx->ota_ctx, OTA_STORAGE_START, ctx->ota.ota_addr, XIP_BASE);
+    OTA_client_setup_memory(&ctx->ota_ctx, OTA_STORAGE_START,
+                            ctx->ota.ota_addr, XIP_BASE);
 
     // Call the library function to perform the actual flash update
     // If returns true, it will reboot the device and never return
     // If returns false, we will print an error message and return,
     //    update will not be performed
-    if (!OTA_write_firmware(&ctx->ota_ctx, ctx))
+    if (!OTA_client_write_firmware(&ctx->ota_ctx, ctx))
     {
       DEBUG("OTA: ERROR! Flash update failed.\n"
             "OTA library configuration is invalid or callbacks are not set up\n");

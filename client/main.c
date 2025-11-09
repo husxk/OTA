@@ -97,7 +97,6 @@ main_()
     return 1;
   }
 
-  // Turn on LEDs just before work loop
   init_leds();
 
   const int ret = workloop(ctx);
