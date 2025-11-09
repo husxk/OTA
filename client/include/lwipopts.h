@@ -41,7 +41,7 @@
 #define DHCP_DOES_ARP_CHECK         0
 #define LWIP_DHCP_DOES_ACD_CHECK    0
 
-#define LWIP_DEBUG                  0
+#define LWIP_DEBUG                  1
 #define LWIP_STATS                  0
 #define LWIP_STATS_DISPLAY          0
 
