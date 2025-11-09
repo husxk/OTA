@@ -147,7 +147,7 @@ static void send_ack_packet_client(OTA_client_ctx* ctx, void* user_ctx)
     size_t ack_size = OTA_packet_write_ack(ack_buffer, sizeof(ack_buffer));
     if (ack_size > 0)
     {
-        ctx->transfer_send_cb(user_ctx, ack_buffer, ack_size);
+        ctx->common.callbacks.transfer_send_cb(user_ctx, ack_buffer, ack_size);
     }
 }
 
@@ -157,20 +157,22 @@ static void send_nack_packet_client(OTA_client_ctx* ctx, void* user_ctx)
     size_t nack_size = OTA_packet_write_nack(nack_buffer, sizeof(nack_buffer));
     if (nack_size > 0)
     {
-        ctx->transfer_send_cb(user_ctx, nack_buffer, nack_size);
+        ctx->common.callbacks.transfer_send_cb(user_ctx, nack_buffer, nack_size);
     }
 }
 
+// TODO:
+// move to ota_client.c and mark as static
 bool OTA_client_handle_data_packet(OTA_client_ctx* ctx,
-                                    void* user_ctx,
-                                    const uint8_t* buffer,
-                                    size_t size)
+                                   void* user_ctx,
+                                   const uint8_t* buffer,
+                                   size_t size)
 {
-    if (!ctx ||
-        !ctx->transfer_store_cb ||
-        !ctx->transfer_reset_cb ||
-        !ctx->transfer_send_cb  ||
-        !ctx->transfer_error_cb)
+    if (!ctx                                     ||
+        !ctx->transfer_store_cb                  ||
+        !ctx->transfer_reset_cb                  ||
+        !ctx->common.callbacks.transfer_send_cb  ||
+        !ctx->common.callbacks.transfer_error_cb)
     {
         return false;
     }
@@ -179,7 +181,7 @@ bool OTA_client_handle_data_packet(OTA_client_ctx* ctx,
     const uint8_t* payload = OTA_packet_get_data(buffer, size);
     if (payload == NULL)
     {
-        ctx->transfer_error_cb(user_ctx, "Invalid packet format");
+        ctx->common.callbacks.transfer_error_cb(user_ctx, "Invalid packet format");
         ctx->transfer_reset_cb(user_ctx);
         send_nack_packet_client(ctx, user_ctx);
         return false;
@@ -188,7 +190,8 @@ bool OTA_client_handle_data_packet(OTA_client_ctx* ctx,
     // Write data to storage
     if (!ctx->transfer_store_cb(user_ctx, payload, OTA_DATA_PAYLOAD_SIZE))
     {
-        ctx->transfer_error_cb(user_ctx, "Failed to write data to storage");
+        ctx->common.callbacks.transfer_error_cb(user_ctx,
+                                                "Failed to write data to storage");
         ctx->transfer_reset_cb(user_ctx);
         send_nack_packet_client(ctx, user_ctx);
         return false;

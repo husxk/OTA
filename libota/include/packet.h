@@ -9,6 +9,7 @@
 
 #include "protocol.h"
 #include "platform.h"
+#include "ota_client.h"
 
 #ifdef __cplusplus
 extern "C" {
