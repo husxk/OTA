@@ -17,12 +17,12 @@ typedef struct
 
     // Server-specific callbacks
     bool (*server_get_payload_cb) (void* ctx,
-                                    const uint8_t** data,
-                                    size_t* size);
+                                   const uint8_t** data,
+                                   size_t* size);
 
     void (*server_transfer_progress_cb) (void* ctx,
-                                          uint32_t bytes_sent,
-                                          uint32_t packet_number);
+                                         uint32_t bytes_sent,
+                                         uint32_t packet_number);
 
 } OTA_server_ctx;
 

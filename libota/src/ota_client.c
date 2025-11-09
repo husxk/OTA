@@ -29,9 +29,9 @@ void OTA_client_setup_memory(OTA_client_ctx* ctx,
 }
 
 bool OTA_RAM_FUNCTION(OTA_client_write_firmware)(OTA_client_ctx* ctx,
-                                                  void* user_ctx)
+                                                 void* user_ctx)
 {
-    if (!ctx ||
+    if (!ctx                      ||
         !ctx->firmware_reboot_cb  ||
         !ctx->firmware_read_cb    ||
         !ctx->firmware_prepare_cb ||
@@ -83,9 +83,9 @@ bool OTA_client_handle_data(OTA_client_ctx* ctx,
     }
 
     // Validate required callbacks
-    if (!ctx->transfer_store_cb ||
-        !ctx->transfer_reset_cb ||
-        !ctx->common.callbacks.transfer_send_cb ||
+    if (!ctx->transfer_store_cb                  ||
+        !ctx->transfer_reset_cb                  ||
+        !ctx->common.callbacks.transfer_send_cb  ||
         !ctx->common.callbacks.transfer_error_cb ||
         !ctx->common.callbacks.transfer_done_cb)
     {
@@ -101,7 +101,7 @@ bool OTA_client_handle_data(OTA_client_ctx* ctx,
     {
         case OTA_DATA_TYPE:
             OTA_common_debug_log(&ctx->common, user_ctx,
-                                "OTA: Received DATA packet\n");
+                                 "OTA: Received DATA packet\n");
             return OTA_client_handle_data_packet(ctx, user_ctx, buffer, size);
 
         case OTA_ACK_TYPE:

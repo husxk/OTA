@@ -5,11 +5,11 @@
 #include <stdarg.h>
 
 static bool ota_send_fin_packet_server(OTA_server_ctx* ctx,
-                                        void* user_ctx)
+                                       void* user_ctx)
 {
     uint8_t fin_buffer[OTA_FIN_PACKET_LENGTH];
     size_t fin_size = OTA_packet_write_fin(fin_buffer,
-                                            sizeof(fin_buffer));
+                                           sizeof(fin_buffer));
 
     if (fin_size == 0)
     {
@@ -25,9 +25,9 @@ static bool ota_send_fin_packet_server(OTA_server_ctx* ctx,
 }
 
 static bool ota_send_data_packet_server(OTA_server_ctx* ctx,
-                                         void* user_ctx,
-                                         const uint8_t* data,
-                                         size_t size)
+                                        void* user_ctx,
+                                        const uint8_t* data,
+                                        size_t size)
 {
     uint8_t send_buffer[OTA_DATA_PACKET_LENGTH];
     size_t bytes_written =
@@ -45,7 +45,7 @@ static bool ota_send_data_packet_server(OTA_server_ctx* ctx,
 
     ctx->common.callbacks.transfer_send_cb(user_ctx, send_buffer, bytes_written);
     OTA_common_debug_log(&ctx->common, user_ctx,
-                          "OTA: DATA packet sent (%zu bytes)\n", size);
+                         "OTA: DATA packet sent (%zu bytes)\n", size);
     return true;
 }
 
@@ -86,7 +86,7 @@ static bool ota_wait_for_response_server(OTA_server_ctx* ctx,
     }
 
     OTA_common_debug_log(&ctx->common, user_ctx,
-                         "OTA: Received ACK\n");
+                         "OTA: Received %u\n", packet_type);
 
     return true;
 }
@@ -99,11 +99,11 @@ bool OTA_server_run_transfer(OTA_server_ctx* ctx, void* user_ctx)
     }
 
     // Validate required server callbacks
-    if (!ctx->server_get_payload_cb ||
-        !ctx->common.callbacks.transfer_send_cb ||
+    if (!ctx->server_get_payload_cb                ||
+        !ctx->common.callbacks.transfer_send_cb    ||
         !ctx->common.callbacks.transfer_receive_cb ||
-        !ctx->common.callbacks.transfer_error_cb ||
-        !ctx->common.callbacks.transfer_done_cb ||
+        !ctx->common.callbacks.transfer_error_cb   ||
+        !ctx->common.callbacks.transfer_done_cb    ||
         !ctx->server_transfer_progress_cb)
     {
         OTA_common_debug_log(&ctx->common, user_ctx,
@@ -121,18 +121,18 @@ bool OTA_server_run_transfer(OTA_server_ctx* ctx, void* user_ctx)
     {
         const uint8_t* data;
         size_t size;
-        
+
         if (!ctx->server_get_payload_cb(user_ctx, &data, &size))
         {
             // No more data, send FIN packet
             OTA_common_debug_log(&ctx->common, user_ctx,
                                 "OTA: No more data, sending FIN packet\n");
-            
+
             if (!ota_send_fin_packet_server(ctx, user_ctx))
             {
                 return false;
             }
-            
+
             if (!ota_wait_for_response_server(ctx, user_ctx, OTA_ACK_TYPE))
             {
                 return false;
