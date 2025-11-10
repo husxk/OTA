@@ -2,7 +2,7 @@
 
 #include "pico/stdlib.h"
 #include "libota/protocol.h"
-#include "libota/ota.h"
+#include "ota.h"
 
 #define TCP_BUF_SIZE 512
 
@@ -32,9 +32,11 @@ typedef struct
 {
   tcp_ctx_t tcp;
   ota_t ota;
-  ota_config_t ota_ctx;
+  OTA_client_ctx ota_ctx;
   absolute_time_t update_timeout;  // Time when firmware update should be performed
   bool update_pending;             // True if update is scheduled
+  uint32_t last_erased_sector;     // Last erased sector during firmware write
+                                   // (for sector tracking)
 } device_ctx_t;
 
 int
@@ -42,12 +44,6 @@ init_device(device_ctx_t**);
 
 void
 tcp_work(device_ctx_t*);
-
-bool
-ota_write_packet_to_flash(device_ctx_t* ctx, const uint8_t* data, size_t size);
-
-void
-ota_reset_flash_offset(device_ctx_t* ctx);
 
 bool
 check_update_timeout(device_ctx_t* ctx);
