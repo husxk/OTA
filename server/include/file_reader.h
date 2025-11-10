@@ -44,6 +44,8 @@ protected:
     bool is_loaded = false;
     bool eof_reached = false;
     size_t file_size = 0;
+
+    // TODO: remove this?
     size_t bytes_sent = 0;
 
 private:
