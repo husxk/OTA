@@ -4,40 +4,49 @@
 #include <cstdio>
 #include <cstdarg>
 #include <cstring>
+#include <memory>
 
-static void transfer_send(void* user_ctx, const uint8_t* data, size_t size)
+void server_context::transfer_send(void* user_ctx,
+                                   const uint8_t* data,
+                                   size_t size)
 {
     server_context* ctx = static_cast<server_context*>(user_ctx);
     ctx->server->send_data(data, size);
 }
 
-static size_t transfer_receive(void* user_ctx, uint8_t* buffer, size_t max_size)
+size_t server_context::transfer_receive(void* user_ctx,
+                                        uint8_t* buffer,
+                                        size_t max_size)
 {
     server_context* ctx = static_cast<server_context*>(user_ctx);
     return ctx->server->receive_data(buffer, max_size);
 }
 
-static void transfer_error(void* user_ctx, const char* error_msg)
+void server_context::transfer_error(void* user_ctx,
+                                    const char* error_msg)
 {
     (void) user_ctx;
     printf("OTA Error: %s\n", error_msg);
 }
 
-static void transfer_done(void* user_ctx, uint32_t total_bytes)
+void server_context::transfer_done(void* user_ctx,
+                                   uint32_t total_bytes)
 {
     (void) user_ctx;
     printf("OTA: Transfer completed successfully (%u bytes)\n", total_bytes);
 }
 
-static void debug_log(void* user_ctx, const char* format, va_list args)
+void server_context::debug_log(void* user_ctx,
+                               const char* format,
+                               va_list args)
 {
     (void) user_ctx;
     vprintf(format, args);
 }
 
-static bool server_get_payload(void* user_ctx,
-                               const uint8_t** data,
-                               size_t* size)
+bool server_context::server_get_payload(void* user_ctx,
+                                        const uint8_t** data,
+                                        size_t* size)
 {
     server_context* ctx = static_cast<server_context*>(user_ctx);
 
@@ -70,9 +79,9 @@ static bool server_get_payload(void* user_ctx,
     return true;
 }
 
-static void server_transfer_progress(void* user_ctx,
-                                     uint32_t bytes_sent,
-                                     uint32_t packet_number)
+void server_context::server_transfer_progress(void* user_ctx,
+                                              uint32_t bytes_sent,
+                                              uint32_t packet_number)
 {
     server_context* ctx = static_cast<server_context*>(user_ctx);
     ctx->packet_number = packet_number;
@@ -85,11 +94,23 @@ static void server_transfer_progress(void* user_ctx,
     ctx->reader->add_bytes_sent(OTA_DATA_PAYLOAD_SIZE);
 }
 
-int init_ota_server(OTA_server_ctx* ctx)
+server_context::server_context()
+    : server(std::make_shared<tcp_server>())
+    , reader(std::make_shared<file_reader>())
+    , packet_number(0)
+{
+}
+
+bool server_context::load_file(const std::string& file_path)
+{
+    return reader->load_file(file_path);
+}
+
+void server_context::init_ota_server(OTA_server_ctx* ctx)
 {
     if (!ctx)
     {
-        return -1;
+        return;
     }
 
     std::memset(ctx, 0, sizeof(*ctx));
@@ -104,6 +125,49 @@ int init_ota_server(OTA_server_ctx* ctx)
     // Set server-specific callbacks
     ctx->server_get_payload_cb       = server_get_payload;
     ctx->server_transfer_progress_cb = server_transfer_progress;
+}
 
-    return 0;
+bool server_context::run(uint16_t port)
+{
+    printf("Starting OTA server on port %u...\n", port);
+
+    if (!this->server->start_server(port))
+    {
+        printf("Failed to start server\n");
+        return false;
+    }
+
+    printf("Server started successfully. Waiting for client...\n");
+
+    if (!this->server->accept_client())
+    {
+        printf("Failed to accept client\n");
+        this->server->stop_server();
+        return false;
+    }
+
+    printf("Client connected from: %s\n", this->server->get_client_ip().c_str());
+    printf("OTA server ready. Sending file data...\n");
+
+    // Initialize OTA server context
+    OTA_server_ctx ota_ctx;
+    init_ota_server(&ota_ctx);
+
+   // Run OTA transfer using libota
+    bool transfer_success = OTA_server_run_transfer(&ota_ctx, this);
+
+    if (!transfer_success)
+    {
+        printf("File transfer failed (%zu/%zu bytes sent)\n",
+               reader->get_bytes_sent(), reader->get_file_size());
+    }
+    else
+    {
+        printf("File transfer completed successfully!\n");
+    }
+
+    this->server->stop_server();
+    printf("OTA server stopped\n");
+
+    return transfer_success;
 }
