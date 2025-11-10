@@ -93,7 +93,10 @@ uint8_t OTA_packet_get_type(const uint8_t* buffer, size_t size)
     }
 }
 
-size_t OTA_packet_write_data(uint8_t* buffer, size_t size, const uint8_t* data, size_t data_size)
+size_t OTA_packet_write_data(uint8_t* buffer,
+                             size_t size,
+                             const uint8_t* data,
+                             size_t data_size)
 {
     if (!buffer || !data || size < OTA_DATA_PACKET_LENGTH)
     {
