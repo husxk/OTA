@@ -10,6 +10,9 @@
 #include "hardware/flash.h"
 #include "hardware/sync.h"
 #include "hardware/watchdog.h"
+#include "pico/bootrom.h"
+#include "hardware/ticks.h"
+#include "hardware/structs/psm.h"
 
 static void transfer_send(void* user_ctx, const uint8_t* data, size_t size)
 {
@@ -39,14 +42,16 @@ static void debug_log(void* user_ctx, const char* format, va_list args)
 
 static void OTA_RAM_FUNCTION(firmware_reboot)(void)
 {
-  // Set up watchdog to power cycle the device
-  watchdog_hw->ctrl = WATCHDOG_CTRL_ENABLE_BITS | WATCHDOG_CTRL_TRIGGER_BITS;
-  watchdog_hw->load = 0;
+  // Reset everything apart from ROSC and XOSC
+   psm_hw->wdsel = PSM_WDSEL_BITS &
+               ~(PSM_WDSEL_ROSC_BITS | PSM_WDSEL_XOSC_BITS);
+
+  // Set up watchdog to reset the device
+  watchdog_hw->ctrl = WATCHDOG_CTRL_TRIGGER_BITS;
 
   // wait for watchdog to power cycle
   while (true)
   {
-    // Device will reset
   }
 }
 
