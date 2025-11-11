@@ -3,6 +3,7 @@
 #include "pico/stdlib.h"
 #include "libota/protocol.h"
 #include "ota.h"
+#include "dht22.h"
 
 #define TCP_BUF_SIZE 512
 
@@ -30,6 +31,12 @@ typedef struct
 
 typedef struct
 {
+  absolute_time_t timeout;       // Next time to poll sensor
+  dht22_data_t    data;          // Last measured values
+} dht_ctx_t;
+
+typedef struct
+{
   tcp_ctx_t tcp;
   ota_t ota;
   OTA_client_ctx ota_ctx;
@@ -37,6 +44,7 @@ typedef struct
   bool update_pending;             // True if update is scheduled
   uint32_t last_erased_sector;     // Last erased sector during firmware write
                                    // (for sector tracking)
+  dht_ctx_t dht;
 } device_ctx_t;
 
 int
@@ -47,3 +55,6 @@ tcp_work(device_ctx_t*);
 
 bool
 check_update_timeout(device_ctx_t* ctx);
+
+void
+dht_work(device_ctx_t* ctx);

@@ -59,12 +59,15 @@ workloop(device_ctx_t* ctx)
   {
     tcp_work(ctx);
 
+    dht_work(ctx);
+
     // Check if firmware update timeout has been reached
     // On success, the device will reboot, memory will be overwritten
     // and never return.
     // On failure, the device will continue running,
     // and we cant do anything about it - probably a bad configuration.
     check_update_timeout(ctx);
+
   }
 }
 

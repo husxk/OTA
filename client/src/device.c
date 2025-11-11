@@ -6,6 +6,7 @@
 #include "debug.h"
 #include "ota.h"
 #include "libota/ota_client.h"
+#include "dht22.h"
 
 #include "lwip/pbuf.h"
 #include "lwip/tcp.h"
@@ -38,6 +39,9 @@ init_device(device_ctx_t** ctx)
     free(*ctx);
     return -1;
   }
+
+  dht22_init();
+  (*ctx)->dht.timeout = 0;
 
   if (tcp_init_client(*ctx) != 0)
   {
@@ -89,5 +93,30 @@ check_update_timeout(device_ctx_t* ctx)
   }
 
   return false;
+}
+
+void
+dht_work(device_ctx_t* ctx)
+{
+  absolute_time_t now = get_absolute_time();
+
+  if (now < ctx->dht.timeout)
+  {
+    return;
+  }
+
+  if (dht22_transact(&ctx->dht.data))
+  {
+    printf("DHT22: temperature=%.1fC humidity=%.1f%%\n",
+           ctx->dht.data.temperature,
+           ctx->dht.data.humidity);
+  }
+  else
+  {
+    printf("DHT22: read failed\n");
+  }
+
+  // schedule next read in 5 seconds
+  ctx->dht.timeout = make_timeout_time_ms(5000);
 }
 
