@@ -5,3 +5,6 @@ build/
 *.tmp
 *.temp
 *.log
+
+mbedtls_config.h
+mbedtls_crypto_config.h

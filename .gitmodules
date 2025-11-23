@@ -1,0 +1,3 @@
+[submodule "libota/libs/mbedtls"]
+	path = libota/libs/mbedtls
+	url = https://github.com/Mbed-TLS/mbedtls.git

@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include "ota_common.h"
+#include "tls_context.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -12,7 +13,7 @@ extern "C" {
 // Server context structure
 typedef struct
 {
-    // Common OTA context (includes common callbacks)
+    // Common OTA context
     OTA_common_ctx_t common;
 
     // Server-specific callbacks
@@ -26,7 +27,15 @@ typedef struct
 
 } OTA_server_ctx;
 
+// Initialize OTA server context
+// Returns: 0 on success, negative value on error
+int OTA_server_init(OTA_server_ctx* ctx);
+
 bool OTA_server_run_transfer(OTA_server_ctx* ctx, void* user_ctx);
+
+// Cleanup OTA server context and free resources
+// Returns: 0 on success, negative value on error
+int OTA_server_cleanup(OTA_server_ctx* ctx);
 
 #ifdef __cplusplus
 }
