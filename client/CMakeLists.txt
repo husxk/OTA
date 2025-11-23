@@ -66,15 +66,20 @@ pkg_check_modules(LIBOTA REQUIRED libota)
 target_include_directories(${MAIN_NAME} PRIVATE ${LIBOTA_INCLUDE_DIRS})
 target_compile_options(${MAIN_NAME} PRIVATE ${LIBOTA_CFLAGS_OTHER})
 
+target_compile_options(${MAIN_NAME} PRIVATE
+    -ffunction-sections
+    -fdata-sections
+)
+
 target_link_libraries(${MAIN_NAME}
           pico_cyw43_arch_lwip_poll
           pico_stdlib
+          hardware_spi
+          hardware_pwm
           ${LIBOTA_LDFLAGS}
         )
 
-pico_add_extra_outputs(${PROJECT_NAME})
+pico_add_extra_outputs(${MAIN_NAME})
 
-target_link_libraries(${PROJECT_NAME} pico_stdlib hardware_spi hardware_pwm)
-
-pico_enable_stdio_usb(${PROJECT_NAME} 1)
-pico_enable_stdio_uart(${PROJECT_NAME} 0)
+pico_enable_stdio_usb(${MAIN_NAME} 1)
+pico_enable_stdio_uart(${MAIN_NAME} 0)

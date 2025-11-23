@@ -5,7 +5,7 @@
 #include "ota.h"
 #include "dht22.h"
 
-#define TCP_BUF_SIZE 512
+#define TCP_BUF_SIZE 2048
 
 // OTA flash storage symbols from linker script
 extern char __ota_storage_start__[];
@@ -14,13 +14,24 @@ extern char __ota_storage_start__[];
 #define OTA_STORAGE_SIZE  (OTA_STORAGE_SIZE_BYTES)  // Defined by CMake
 #define OTA_STORAGE_END   (OTA_STORAGE_START + OTA_STORAGE_SIZE)
 
+// Simple pbuf queue node
+typedef struct pbuf_queue_node
+{
+  struct pbuf* p;
+  struct pbuf_queue_node* next;
+} pbuf_queue_node_t;
+
 typedef struct
 {
   struct tcp_pcb* client_pcb;
-  uint8_t         recv_buffer[TCP_BUF_SIZE];
-  uint16_t        recv_len;
+  pbuf_queue_node_t* pbuf_queue_head;  // Queue of pbufs from lwip
+  pbuf_queue_node_t* pbuf_queue_tail;
+  pbuf_queue_node_t* current_node;      // Currently being consumed node
+  uint16_t current_offset;              // Offset within current_node->p
   bool            connected;
   absolute_time_t last_reconnect_attempt;
+  absolute_time_t connection_time;      // Time when TCP connection was established
+  bool            handshake_started;    // True if TLS handshake has been initiated
 } tcp_ctx_t;
 
 typedef struct

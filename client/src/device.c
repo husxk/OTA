@@ -36,6 +36,7 @@ init_device(device_ctx_t** ctx)
   if (init_ota(&(*ctx)->ota_ctx) != 0)
   {
     DEBUG("OTA: Failed to initialize OTA callbacks\n");
+    // OTA not initialized, no cleanup needed
     free(*ctx);
     return -1;
   }
@@ -45,6 +46,8 @@ init_device(device_ctx_t** ctx)
 
   if (tcp_init_client(*ctx) != 0)
   {
+    // Cleanup OTA/TLS resources before freeing context on error
+    OTA_client_cleanup(&(*ctx)->ota_ctx);
     free(*ctx);
     return -1;
   }

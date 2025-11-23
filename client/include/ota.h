@@ -8,6 +8,9 @@
 #include "libota/ota_common.h"
 #include "libota/protocol.h"
 
+// Forward declaration for entropy callback
+extern int entropy_callback(void* ctx, unsigned char* output, size_t len);
+
 #ifdef __cplusplus
 extern "C" {
 #endif

@@ -16,6 +16,7 @@
 #include "debug.h"
 #include "tcp.h"
 #include "ota.h"
+#include "libota/ota_client.h"
 
 static void
 print_ip_address(void)
@@ -103,6 +104,9 @@ main_()
   init_leds();
 
   const int ret = workloop(ctx);
+
+  // Cleanup OTA/TLS resources before freeing context
+  OTA_client_cleanup(&ctx->ota_ctx);
 
   free(ctx);
 
