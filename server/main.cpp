@@ -3,27 +3,43 @@
 
 static void print_usage(const char* program_name)
 {
-    printf("Usage: %s <file_path>\n", program_name);
+    printf("Usage: %s <file_path> <cert_path> <key_path>\n", program_name);
     printf("  file_path: Path to the binary file to send via OTA\n");
+    printf("  cert_path: Path to the certificate file (PEM format)\n");
+    printf("  key_path:  Path to the private key file (PEM format)\n");
     printf("\nExample:\n");
-    printf("  %s firmware.bin\n", program_name);
+    printf("  %s firmware.bin server.crt server.key\n", program_name);
 }
 
 int main(int argc, char* argv[])
 {
-    if (argc != 2)
+    if (argc != 4)
     {
         print_usage(argv[0]);
         return 1;
     }
 
     const char* file_path = argv[1];
+    const char* cert_path = argv[2];
+    const char* key_path  = argv[3];
 
     server_context server_ctx;
 
     if (!server_ctx.load_file(file_path))
     {
         printf("Error: Cannot open file '%s'\n", file_path);
+        return 1;
+    }
+
+    if (!server_ctx.load_pki(cert_path, key_path))
+    {
+        printf("Error: Failed to load PKI data\n");
+        return 1;
+    }
+
+    if (!server_ctx.init())
+    {
+        printf("Error: Failed to initialize OTA server\n");
         return 1;
     }
 

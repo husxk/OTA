@@ -1,10 +1,14 @@
 #include "ota_server_wrapper.h"
+#include "libota/ota_common.h"
 #include "libota/ota_server.h"
 #include "libota/protocol.h"
 #include <cstdio>
 #include <cstdarg>
 #include <cstring>
 #include <memory>
+#include <vector>
+#include <fstream>
+#include <cstdlib>
 
 void server_context::transfer_send(void* user_ctx,
                                    const uint8_t* data,
@@ -94,16 +98,124 @@ void server_context::server_transfer_progress(void* user_ctx,
     ctx->reader->add_bytes_sent(OTA_DATA_PAYLOAD_SIZE);
 }
 
+int server_context::entropy_callback(void* ctx, unsigned char* output, size_t len)
+{
+    server_context* server_ctx = static_cast<server_context*>(ctx);
+
+    if (!server_ctx ||
+        !server_ctx->urandom_file.valid())
+    {
+        return -1;
+    }
+
+    size_t bytes_read = server_ctx->urandom_file.read(output, len);
+
+    if (bytes_read != len)
+    {
+        return -1;
+    }
+
+    return 0;
+}
+
 server_context::server_context()
     : server(std::make_unique<tcp_server>())
     , reader(std::make_unique<file_reader>())
     , packet_number(0)
 {
+    // Open /dev/urandom for entropy generation
+    FILE* urandom = fopen("/dev/urandom", "rb");
+    if (urandom)
+    {
+        urandom_file.set(urandom);
+    }
 }
 
 bool server_context::load_file(const std::string& file_path)
 {
     return reader->load_file(file_path);
+}
+
+bool server_context::load_pki(const std::string& cert_path,
+                              const std::string& key_path)
+{
+    // Read certificate file
+    std::ifstream cert_file(cert_path, std::ios::binary);
+    if (!cert_file.is_open())
+    {
+        printf("Error: Cannot open certificate file '%s'\n",
+               cert_path.c_str());
+
+        return false;
+    }
+
+    this->cert_data = std::vector<unsigned char>(
+        std::istreambuf_iterator<char>(cert_file),
+        std::istreambuf_iterator<char>());
+
+    cert_file.close();
+
+    if (this->cert_data.empty())
+    {
+        printf("Error: Certificate file '%s' is empty\n",
+               cert_path.c_str());
+
+        return false;
+    }
+
+    // Ensure null terminator for mbedTLS PEM parsing
+    if (this->cert_data.back() != '\0')
+    {
+        cert_data.push_back('\0');
+    }
+
+    // Read private key file
+    std::ifstream key_file(key_path, std::ios::binary);
+    if (!key_file.is_open())
+    {
+        printf("Error: Cannot open private key file '%s'\n", key_path.c_str());
+        this->cert_data.clear();
+        return false;
+    }
+
+    this->key_data = std::vector<unsigned char>(
+        std::istreambuf_iterator<char>(key_file),
+        std::istreambuf_iterator<char>());
+
+    key_file.close();
+
+    // Ensure null terminator for mbedTLS PEM parsing
+    if (this->key_data.back() != '\0')
+    {
+        this->key_data.push_back('\0');
+    }
+
+    if (this->key_data.empty())
+    {
+        printf("Error: Private key file '%s' is empty\n", key_path.c_str());
+        cert_data.clear();
+        return false;
+    }
+
+    printf("Loaded certificate (%zu bytes) and private key (%zu bytes)\n",
+           this->cert_data.size(), this->key_data.size());
+
+    return true;
+}
+
+bool server_context::init()
+{
+    // Initialize OTA server context structure
+    init_ota_server(&ota_ctx);
+
+    // Initialize TLS and OTA server (must be called after init_ota_server)
+    if (OTA_server_init(&ota_ctx) != 0)
+    {
+        printf("Error: Failed to initialize OTA server\n");
+        return false;
+    }
+
+    return true;
 }
 
 void server_context::init_ota_server(OTA_server_ctx* ctx)
@@ -114,6 +226,29 @@ void server_context::init_ota_server(OTA_server_ctx* ctx)
     }
 
     std::memset(ctx, 0, sizeof(*ctx));
+
+    // Set entropy callback for TLS
+    // Pass 'this' as context so entropy_callback can access urandom_file
+    OTA_set_entropy_cb(entropy_callback, this);
+
+    // Validate and set PKI data for TLS
+    if (cert_data.empty())
+    {
+        printf("Error: Certificate data is empty. Call load_pki() before run()\n");
+        exit(1);
+    }
+
+    if (key_data.empty())
+    {
+        printf("Error: Private key data is empty. Call load_pki() before run()\n");
+        exit(1);
+    }
+
+    OTA_set_pki_data(&ctx->common.tls,
+                     cert_data.data(),
+                     cert_data.size(),
+                     key_data.data(),
+                     key_data.size());
 
     // Set common transfer callbacks
     ctx->common.callbacks.transfer_send_cb    = transfer_send;
@@ -146,15 +281,16 @@ bool server_context::run(uint16_t port)
         return false;
     }
 
-    printf("Client connected from: %s\n", this->server->get_client_ip().c_str());
+    printf("Client connected from: %s\n",
+           this->server->get_client_ip().c_str());
+
     printf("OTA server ready. Sending file data...\n");
 
-    // Initialize OTA server context
-    OTA_server_ctx ota_ctx;
-    init_ota_server(&ota_ctx);
-
-   // Run OTA transfer using libota
+    // Run OTA transfer using libota
     bool transfer_success = OTA_server_run_transfer(&ota_ctx, this);
+
+    // Cleanup OTA server resources
+    OTA_server_cleanup(&ota_ctx);
 
     if (!transfer_success)
     {

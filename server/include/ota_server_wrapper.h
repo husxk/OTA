@@ -1,12 +1,15 @@
 #pragma once
 
 #include "libota/ota_server.h"
+#include "libota/ota_common.h"
 #include "tcp_server.h"
 #include "file_reader.h"
+#include "file_wrapper.h"
 #include <cstdint>
 #include <memory>
 #include <string>
 #include <cstdarg>
+#include <vector>
 
 class server_context
 {
@@ -15,6 +18,8 @@ public:
     ~server_context() = default;
 
     bool load_file(const std::string& file_path);
+    bool load_pki(const std::string& cert_path, const std::string& key_path);
+    bool init();
     bool run(uint16_t port);
 
 private:
@@ -46,8 +51,18 @@ private:
                                          uint32_t bytes_sent,
                                          uint32_t packet_number);
 
+    static int entropy_callback(void* ctx, unsigned char* output, size_t len);
+
     std::unique_ptr<tcp_server> server;
     std::unique_ptr<file_reader> reader;
+    file_wrapper urandom_file;
+
+    // PKI data (certificate and private key)
+    std::vector<unsigned char> cert_data;
+    std::vector<unsigned char> key_data;
+
+    // OTA server context (initialized in init())
+    OTA_server_ctx ota_ctx;
 
     uint32_t packet_number;
 };

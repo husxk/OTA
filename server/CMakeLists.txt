@@ -28,3 +28,4 @@ target_compile_options(${MAIN_NAME} PRIVATE ${LIBOTA_CFLAGS_OTHER})
 target_link_libraries(${MAIN_NAME} ${LIBOTA_LDFLAGS})
 
 target_compile_options(${MAIN_NAME} PRIVATE -Wall -Wextra)
+

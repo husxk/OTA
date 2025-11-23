@@ -44,6 +44,15 @@ public:
         return file != nullptr;
     }
 
+    size_t read(void* buffer, size_t size)
+    {
+        if (!file)
+        {
+            return 0;
+        }
+        return fread(buffer, 1, size, file);
+    }
+
 private:
     FILE* file;
 };

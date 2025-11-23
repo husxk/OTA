@@ -5,8 +5,10 @@ PURPLE := $(ESC)[0;35m
 ZERO := $(ESC)[0;0m
 
 MAIN_NAME := ota_server
+CERT_FILE := build/server.crt
+KEY_FILE  := build/server.key
 
-all: build/ make
+all: build/ make $(CERT_FILE) $(KEY_FILE)
 
 build/: CMakeLists.txt
 	echo -e "$(GREEN)Configuring CMake build...$(ZERO)"
@@ -17,11 +19,21 @@ make: build/
 	echo -e "$(GREEN)Building $(PURPLE)$(MAIN_NAME)$(GREEN)...$(ZERO)"
 	cd build && make
 
+# Generate certificate and private key if they don't exist
+$(CERT_FILE) $(KEY_FILE): scripts/generate_cert.sh
+	echo -e "$(GREEN)Generating TLS certificate and private key...$(ZERO)"
+	scripts/generate_cert.sh
+
 build/$(MAIN_NAME): make
 
-run: build/$(MAIN_NAME) build/device.bin
+run: build/$(MAIN_NAME) build/device.bin $(CERT_FILE) $(KEY_FILE)
 	echo -e "$(GREEN)Running $(PURPLE)$(MAIN_NAME)$(GREEN) with device.bin...$(ZERO)"
-	cd build && ./$(MAIN_NAME) device.bin
+	cd build && ./$(MAIN_NAME) device.bin server.crt server.key
+
+debug: build/$(MAIN_NAME) build/device.bin $(CERT_FILE) $(KEY_FILE)
+	echo -e "$(GREEN)Running $(PURPLE)$(MAIN_NAME)$(GREEN) with device.bin...$(ZERO)"
+	cd build && gdb --args ./$(MAIN_NAME) device.bin server.crt server.key
+
 
 clean:
 	echo -e "$(RED)Cleaning build directory...$(ZERO)"

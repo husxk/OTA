@@ -15,3 +15,9 @@ cmake_install.cmake
 # Compiled executables
 ota_server
 test_file_reader
+
+# TLS certificate and private key
+*.crt
+*.key
+server.crt
+server.key
