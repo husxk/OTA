@@ -27,16 +27,14 @@ $(CERT_FILE) $(KEY_FILE): scripts/generate_cert.sh
 build/$(MAIN_NAME): make
 
 run: build/$(MAIN_NAME) build/device.bin $(CERT_FILE) $(KEY_FILE)
-	echo -e "$(GREEN)Running $(PURPLE)$(MAIN_NAME)$(GREEN) with device.bin...$(ZERO)"
-	cd build && ./$(MAIN_NAME) device.bin server.crt server.key
+	scripts/run.sh
 
 debug: build/$(MAIN_NAME) build/device.bin $(CERT_FILE) $(KEY_FILE)
-	echo -e "$(GREEN)Running $(PURPLE)$(MAIN_NAME)$(GREEN) with device.bin...$(ZERO)"
-	cd build && gdb --args ./$(MAIN_NAME) device.bin server.crt server.key
+	scripts/run.sh --debug
 
 
 clean:
 	echo -e "$(RED)Cleaning build directory...$(ZERO)"
 	rm -rf build/
 
-.PHONY: make run clean
+.PHONY: make run clean debug
