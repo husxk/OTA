@@ -105,9 +105,8 @@ size_t OTA_packet_write_data(uint8_t* buffer,
 
     if (data_size != OTA_DATA_PAYLOAD_SIZE)
     {
-        printf("ERROR: data_size (%zu) != OTA_DATA_PAYLOAD_SIZE (%d) - aborting as protocol guarantees are broken\n",
-               data_size, OTA_DATA_PAYLOAD_SIZE);
-        abort();
+        // Protocol violation: data size must match OTA_DATA_PAYLOAD_SIZE
+        return 0;
     }
 
     uint16_t length = htons(OTA_DATA_PACKET_LENGTH);
