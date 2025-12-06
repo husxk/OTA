@@ -33,9 +33,18 @@ size_t OTA_packet_write_nack(uint8_t* buffer, size_t size)
     return OTA_NACK_PACKET_LENGTH;
 }
 
-size_t OTA_packet_write_fin(uint8_t* buffer, size_t size)
+size_t OTA_packet_write_fin(uint8_t* buffer,
+                            size_t size,
+                            const uint8_t* signature,
+                            size_t signature_len)
 {
     if (!buffer || size < OTA_FIN_PACKET_LENGTH)
+    {
+        return 0;
+    }
+
+    // Signature must be exactly OTA_SHA512_SIGNATURE_LENGTH bytes (protocol requirement)
+    if (!signature || signature_len != OTA_SHA512_SIGNATURE_LENGTH)
     {
         return 0;
     }
@@ -44,6 +53,9 @@ size_t OTA_packet_write_fin(uint8_t* buffer, size_t size)
     memcpy(&buffer[OTA_COMMON_PACKET_LENGTH_POS], &length, sizeof(length));
 
     buffer[OTA_COMMON_PACKET_TYPE_POS] = OTA_FIN_TYPE;
+
+    // Copy signature (always OTA_SHA512_SIGNATURE_LENGTH bytes)
+    memcpy(&buffer[OTA_FIN_SIGNATURE_POS], signature, OTA_SHA512_SIGNATURE_LENGTH);
 
     return OTA_FIN_PACKET_LENGTH;
 }
@@ -137,4 +149,31 @@ const uint8_t* OTA_packet_get_data(const uint8_t* buffer, size_t size)
     }
 
     return &buffer[OTA_COMMON_PACKET_LENGTH];
+}
+
+const uint8_t* OTA_packet_get_fin_signature(const uint8_t* buffer,
+                                            size_t size,
+                                            size_t* signature_len)
+{
+    if (!buffer || size < OTA_FIN_PACKET_LENGTH || !signature_len)
+    {
+        if (signature_len)
+            *signature_len = 0;
+        return NULL;
+    }
+
+    uint16_t length;
+    memcpy(&length, &buffer[OTA_COMMON_PACKET_LENGTH_POS], sizeof(length));
+    length = ntohs(length);
+
+    if (buffer[OTA_COMMON_PACKET_TYPE_POS] != OTA_FIN_TYPE ||
+        length != OTA_FIN_PACKET_LENGTH)
+    {
+        *signature_len = 0;
+        return NULL;
+    }
+
+    // Return signature area (always OTA_SHA512_SIGNATURE_LENGTH bytes)
+    *signature_len = OTA_SHA512_SIGNATURE_LENGTH;
+    return &buffer[OTA_FIN_SIGNATURE_POS];
 }

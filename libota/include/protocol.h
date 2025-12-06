@@ -28,4 +28,7 @@
 
 /* FIN packet type */
 #define OTA_FIN_TYPE                    0x04
-#define OTA_FIN_PACKET_LENGTH           OTA_COMMON_PACKET_LENGTH
+#define OTA_FIN_SIGNATURE_POS           OTA_COMMON_PACKET_LENGTH
+#define OTA_SHA512_SIGNATURE_LENGTH     256
+#define OTA_FIN_PACKET_LENGTH           (OTA_COMMON_PACKET_LENGTH + \
+                                         OTA_SHA512_SIGNATURE_LENGTH)

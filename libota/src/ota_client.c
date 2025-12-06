@@ -38,6 +38,14 @@ int OTA_client_init(OTA_client_ctx* ctx)
         return -1;
     }
 
+    // Initialize SHA-512 hash calculation for image verification
+    if (ota_common_sha512_init(&ctx->common) != 0)
+    {
+        ota_common_debug_log(&ctx->common, NULL,
+                             "Warning: Failed to initialize SHA-512, "
+                             "continuing without hash calculation\n");
+    }
+
     return ota_common_tls_init(&ctx->common, MBEDTLS_SSL_IS_CLIENT);
 }
 
@@ -143,6 +151,9 @@ static bool OTA_client_handle_data_packet(OTA_client_ctx* ctx,
         send_nack_packet_client(ctx, user_ctx);
         return false;
     }
+
+    // Update SHA-512 hash with payload data (before storing)
+    ota_common_sha512_update(&ctx->common, payload, OTA_DATA_PAYLOAD_SIZE);
 
     // Write data to storage
     if (!ctx->transfer_store_cb(user_ctx, payload, OTA_DATA_PAYLOAD_SIZE))
@@ -394,6 +405,51 @@ bool OTA_client_handle_data(OTA_client_ctx* ctx,
             ota_common_debug_log(&ctx->common, user_ctx,
                                  "OTA: Received FIN packet, file transfer complete!\n");
 
+            // Finalize SHA-512 hash calculation
+            if (ctx->common.sha512.sha512_active)
+            {
+                ota_common_sha512_finish(&ctx->common);
+            }
+
+            // Extract signature from FIN packet
+            size_t received_signature_len = 0;
+            const uint8_t* received_signature =
+                OTA_packet_get_fin_signature(buffer,
+                                             size,
+                                             &received_signature_len);
+
+            if (!received_signature ||
+                 received_signature_len != OTA_SHA512_SIGNATURE_LENGTH)
+            {
+                ota_common_debug_log(&ctx->common, user_ctx,
+                                     "OTA: Invalid FIN packet signature format\n");
+                // Reset offsets on invalid signature format
+                if (ctx->transfer_reset_cb)
+                {
+                    ctx->transfer_reset_cb(user_ctx);
+                }
+                ctx->common.callbacks.transfer_error_cb(user_ctx,
+                                                        "Invalid FIN packet signature");
+                return false;
+            }
+
+            // Verify signature using common function
+            int verify_ret = ota_common_sha512_verify(&ctx->common,
+                                                       received_signature,
+                                                       received_signature_len);
+
+            if (verify_ret != 0)
+            {
+                // Reset offsets on verification failure
+                if (ctx->transfer_reset_cb)
+                {
+                    ctx->transfer_reset_cb(user_ctx);
+                }
+                ctx->common.callbacks.transfer_error_cb(user_ctx,
+                                                        "Signature verification failed");
+                return false;
+            }
+
             // Send ACK for FIN packet
             uint8_t ack_buffer[OTA_ACK_PACKET_LENGTH];
             size_t ack_size = OTA_packet_write_ack(ack_buffer, sizeof(ack_buffer));
@@ -413,6 +469,12 @@ bool OTA_client_handle_data(OTA_client_ctx* ctx,
             ota_common_debug_log(&ctx->common, user_ctx,
                                  "OTA: Received invalid packet (type: 0x%02X)\n",
                                  packet_type);
+
+            // Reset offsets on invalid packet
+            if (ctx->transfer_reset_cb)
+            {
+                ctx->transfer_reset_cb(user_ctx);
+            }
 
             // Send NACK for invalid packet
             uint8_t nack_buffer[OTA_NACK_PACKET_LENGTH];

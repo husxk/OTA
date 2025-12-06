@@ -258,13 +258,13 @@ int tls_context_init(tls_context_t* ctx, int endpoint)
     ota_common_debug_log(ctx->ota_ctx, NULL,
                          "Initializing PSA crypto...\n");
 
-    psa_status_t psa_ret = psa_crypto_init();
-    if (psa_ret != PSA_SUCCESS)
+    int init_ret = ota_common_ensure_psa_crypto_init();
+    if (init_ret != 0)
     {
         ota_common_debug_log(ctx->ota_ctx, NULL,
                              "Error: psa_crypto_init() failed: %d\n",
-                             (int)psa_ret);
-        ret = -(int)psa_ret;
+                             -init_ret);
+        ret = init_ret;
         goto cleanup;
     }
 

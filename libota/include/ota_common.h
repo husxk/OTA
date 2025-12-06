@@ -6,10 +6,45 @@
 #include <stdarg.h>
 
 #include "tls_context.h"
+#include "protocol.h"
+#include <psa/crypto.h>
+#include <mbedtls/pk.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+// SHA-512 hash context for image verification
+typedef struct
+{
+    // PSA hash operation for streaming calculation
+    psa_hash_operation_t sha512_operation;
+
+    // Flag indicating if SHA-512 operation is active (initialized)
+    bool sha512_active;
+
+    // SHA-512 hash result (64 bytes for SHA-512)
+    // Set to all zeros when hash is not calculated
+    uint8_t sha512_hash[64];
+
+    // Flag indicating if SHA-512 hash has been calculated
+    bool sha512_calculated;
+
+    // Private key for signing
+    mbedtls_pk_context* sha512_private_key;
+
+    // Public key for signature verification
+    mbedtls_pk_context* sha512_public_key;
+
+    // Signature result (SHA-512 signature length)
+    uint8_t sha512_signature[OTA_SHA512_SIGNATURE_LENGTH];
+
+    // Actual signature length
+    size_t sha512_signature_length;
+
+    // Flag indicating if signature has been calculated
+    bool sha512_signed;
+} ota_sha512_ctx_t;
 
 // Common transfer callbacks shared between client and server
 typedef struct
@@ -50,6 +85,8 @@ struct ota_common_ctx
     // TLS context
     tls_context_t tls;
 
+    // SHA-512 hash context for image verification
+    ota_sha512_ctx_t sha512;
 };
 
 // Common debug logging function
@@ -77,6 +114,11 @@ size_t OTA_recv_data(OTA_common_ctx_t* ctx,
 // Returns: 0 on success, negative value on error
 int OTA_set_entropy_cb(tls_entropy_cb_t entropy_cb, void* entropy_ctx);
 
+// Ensure PSA crypto is initialized
+// Returns: 0 on success, negative value on error
+// This function is idempotent - safe to call multiple times
+int ota_common_ensure_psa_crypto_init(void);
+
 // Initialize TLS context
 // endpoint: MBEDTLS_SSL_IS_SERVER for server mode, MBEDTLS_SSL_IS_CLIENT for client mode
 // Returns: 0 on success, negative value on error
@@ -95,6 +137,52 @@ int OTA_set_pki_data(tls_context_t* ctx,
                      size_t cert_len,
                      const unsigned char* key_data,
                      size_t key_len);
+
+// Internal SHA-512 functions
+// Initialize SHA-512 hash calculation
+// Returns: 0 on success, negative value on error
+int ota_common_sha512_init(OTA_common_ctx_t* ctx);
+
+// Update SHA-512 hash with data chunk
+// Returns: 0 on success, negative value on error
+int ota_common_sha512_update(OTA_common_ctx_t* ctx,
+                             const uint8_t* data,
+                             size_t size);
+
+// Finalize SHA-512 hash calculation
+// Returns: 0 on success, negative value on error
+int ota_common_sha512_finish(OTA_common_ctx_t* ctx);
+
+// Cleanup SHA-512 context
+void ota_common_sha512_cleanup(OTA_common_ctx_t* ctx);
+
+// Sign the calculated SHA-512 hash with private key
+// Returns: 0 on success, negative value on error
+int ota_common_sha512_sign(OTA_common_ctx_t* ctx);
+
+// Verify signature against calculated SHA-512 hash using public key
+// signature: Pointer to signature data
+// signature_len: Length of signature data (must be OTA_SHA512_SIGNATURE_LENGTH)
+// Returns: 0 on success (signature is valid), negative value on error
+int ota_common_sha512_verify(OTA_common_ctx_t* ctx,
+                             const uint8_t* signature,
+                             size_t signature_len);
+
+// Set private key for SHA-512 signing
+// key_data: Pointer to key data in PEM or DER format
+// key_len: Length of key data
+// Returns: 0 on success, negative value on error
+int OTA_set_sha512_private_key(OTA_common_ctx_t* ctx,
+                               const unsigned char* key_data,
+                               size_t key_len);
+
+// Set public key for SHA-512 signature verification
+// key_data: Pointer to key data in PEM or DER format
+// key_len: Length of key data
+// Returns: 0 on success, negative value on error
+int OTA_set_sha512_public_key(OTA_common_ctx_t* ctx,
+                              const unsigned char* key_data,
+                              size_t key_len);
 
 #ifdef __cplusplus
 }

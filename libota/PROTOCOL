@@ -91,16 +91,22 @@ The payload size is fixed at 256 bytes.
 
 FIN binary packet protocol:
 
-[LENGTH][FIN]
+[LENGTH][FIN][SIGNATURE]
 
 LENGTH        uint16_t
 TYPE          uint8_t
+SIGNATURE     uint8_t[256]
 
 where:
   LENGTH      = Length of whole packet.
-                Must be set to 0x03 (3 bytes).
+                Must be set to 0x0103 (259 bytes).
 
   FIN         = 0x04
 
-FIN packet signals the end of file transfer.
-After receiving FIN, the client should disconnect and proceed with hardware binary update.
+  SIGNATURE   = 256 bytes of SHA-512 signature.
+                Signature is calculated over the entire image data using SHA-512 hash
+                and signed with the server's private key.
+
+FIN packet signals the end of file transfer and includes the signature for verification.
+After receiving FIN, the client should verify the signature, then disconnect and proceed
+with hardware binary update.

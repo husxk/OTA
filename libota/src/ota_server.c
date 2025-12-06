@@ -10,8 +10,28 @@ static bool ota_send_fin_packet_server(OTA_server_ctx* ctx,
                                        void* user_ctx)
 {
     uint8_t fin_buffer[OTA_FIN_PACKET_LENGTH];
+
+    // Check if signature is available and has correct length
+    if (!ctx->common.sha512.sha512_signed)
+    {
+        ctx->common.callbacks.transfer_error_cb(user_ctx,
+                                                "Cannot send FIN packet: "
+                                                "signature not calculated");
+        return false;
+    }
+
+    if (ctx->common.sha512.sha512_signature_length != OTA_SHA512_SIGNATURE_LENGTH)
+    {
+        ctx->common.callbacks.transfer_error_cb(user_ctx,
+                                                "Cannot send FIN packet: "
+                                                "invalid signature length");
+        return false;
+    }
+
     size_t fin_size = OTA_packet_write_fin(fin_buffer,
-                                           sizeof(fin_buffer));
+                                           sizeof(fin_buffer),
+                                           ctx->common.sha512.sha512_signature,
+                                           ctx->common.sha512.sha512_signature_length);
 
     if (fin_size == 0)
     {
@@ -22,7 +42,7 @@ static bool ota_send_fin_packet_server(OTA_server_ctx* ctx,
 
     OTA_send_data(&ctx->common, user_ctx, fin_buffer, fin_size);
     ota_common_debug_log(&ctx->common, user_ctx,
-                         "OTA: FIN packet sent\n");
+                         "OTA: FIN packet sent with signature\n");
     return true;
 }
 
@@ -191,6 +211,14 @@ bool OTA_server_run_transfer(OTA_server_ctx* ctx, void* user_ctx)
     ota_common_debug_log(&ctx->common, user_ctx,
                          "OTA: Starting server file transfer\n");
 
+    // Initialize SHA-512
+    if (ota_common_sha512_init(&ctx->common) != 0)
+    {
+        ota_common_debug_log(&ctx->common, user_ctx,
+                             "Warning: Failed to initialize SHA-512, "
+                             "continuing without hash calculation\n");
+    }
+
     uint32_t packet_number = 1;
     uint32_t total_bytes_sent = 0;
 
@@ -201,6 +229,12 @@ bool OTA_server_run_transfer(OTA_server_ctx* ctx, void* user_ctx)
 
         if (!ctx->server_get_payload_cb(user_ctx, &data, &size))
         {
+            // No more data, finalize SHA-512 hash before sending FIN
+            ota_common_sha512_finish(&ctx->common);
+
+            // Sign the hash if private key is available
+            ota_common_sha512_sign(&ctx->common);
+
             // No more data, send FIN packet
             ota_common_debug_log(&ctx->common, user_ctx,
                                  "OTA: No more data, sending FIN packet\n");
@@ -217,6 +251,9 @@ bool OTA_server_run_transfer(OTA_server_ctx* ctx, void* user_ctx)
 
             break;
         }
+
+        // Update SHA-512 hash with data chunk (before sending)
+        ota_common_sha512_update(&ctx->common, data, size);
 
         if (!ota_send_data_packet_server(ctx, user_ctx, data, size))
         {

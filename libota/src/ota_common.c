@@ -1,8 +1,18 @@
 #include "ota_common.h"
 #include "tls_context.h"
+#include "protocol.h"
 #include <mbedtls/error.h>
 #include <mbedtls/ssl.h>
+#include <mbedtls/md.h>
+#include <mbedtls/pk.h>
+#include <psa/crypto.h>
 #include <stdarg.h>
+#include <stdbool.h>
+#include <string.h>
+#include <stdlib.h>
+
+// Static flag to track PSA crypto initialization state
+static bool psa_crypto_initialized = false;
 
 void ota_common_debug_log(OTA_common_ctx_t* ctx,
                           void* user_ctx,
@@ -79,6 +89,26 @@ int OTA_set_entropy_cb(tls_entropy_cb_t entropy_cb, void* entropy_ctx)
     return tls_set_entropy_callback(entropy_cb, entropy_ctx);
 }
 
+// Ensure PSA crypto is initialized
+// Returns: 0 on success, negative value on error
+// This function is safe to call multiple times
+int ota_common_ensure_psa_crypto_init(void)
+{
+    if (psa_crypto_initialized)
+    {
+        return 0; // Already initialized
+    }
+
+    psa_status_t psa_ret = psa_crypto_init();
+    if (psa_ret != PSA_SUCCESS)
+    {
+        return -(int)psa_ret;
+    }
+
+    psa_crypto_initialized = true;
+    return 0;
+}
+
 int OTA_set_pki_data(tls_context_t* ctx,
                      const unsigned char* cert_data,
                      size_t cert_len,
@@ -135,5 +165,456 @@ int ota_common_tls_cleanup(OTA_common_ctx_t* ctx)
     tls_context_close(&ctx->tls);
     tls_context_free(&ctx->tls);
 
+    // Cleanup SHA-512 context
+    ota_common_sha512_cleanup(ctx);
+
     return 0;
+}
+
+int ota_common_sha512_init(OTA_common_ctx_t* ctx)
+{
+    if (!ctx)
+        return -1;
+
+    // Cleanup any existing hash operation
+    // Don't call full cleanup as it would free the private/public keys
+    if (ctx->sha512.sha512_active)
+    {
+        psa_hash_abort(&ctx->sha512.sha512_operation);
+    }
+
+    // Reset all hash-related state
+    // Note: We do NOT free sha512_private_key or sha512_public_key here
+    // as they are set once and should persist across hash operations
+    memset(&ctx->sha512.sha512_operation, 0, sizeof(ctx->sha512.sha512_operation));
+    memset(ctx->sha512.sha512_hash      , 0, sizeof(ctx->sha512.sha512_hash));
+    memset(ctx->sha512.sha512_signature , 0, sizeof(ctx->sha512.sha512_signature));
+
+    ctx->sha512.sha512_calculated       = false;
+    ctx->sha512.sha512_active           = false;
+    ctx->sha512.sha512_signature_length = 0;
+    ctx->sha512.sha512_signed           = false;
+
+    // Setup SHA-512 hash operation
+    psa_status_t status =
+        psa_hash_setup(&ctx->sha512.sha512_operation, PSA_ALG_SHA_512);
+    if (status != PSA_SUCCESS)
+    {
+        ota_common_debug_log(ctx, NULL,
+                             "Error: Failed to setup SHA-512: %d\n",
+                             (int)status);
+
+        // Cleanup on error
+        psa_hash_abort(&ctx->sha512.sha512_operation);
+        memset(&ctx->sha512.sha512_operation,
+               0,
+               sizeof(ctx->sha512.sha512_operation));
+
+        ctx->sha512.sha512_active = false;
+
+        return -1;
+    }
+
+    // Mark operation as active after successful setup
+    ctx->sha512.sha512_active = true;
+
+    ota_common_debug_log(ctx, NULL,
+                         "SHA-512 hash calculation initialized\n");
+
+    return 0;
+}
+
+int ota_common_sha512_update(OTA_common_ctx_t* ctx,
+                             const uint8_t* data,
+                             size_t size)
+{
+    if (!ctx  ||
+        !data ||
+        size == 0)
+    {
+         return -1;
+    }
+
+    // Check if operation is initialized
+    if (!ctx->sha512.sha512_active)
+    {
+        int ret = ota_common_sha512_init(ctx);
+
+        if (ret != 0)
+            return ret;
+    }
+
+    // Update hash with data
+    psa_status_t status = psa_hash_update(&ctx->sha512.sha512_operation, data, size);
+    if (status != PSA_SUCCESS)
+    {
+        ota_common_debug_log(ctx, NULL,
+                             "Error: Failed to update SHA-512: %d\n",
+                             (int)status);
+
+        psa_hash_abort(&ctx->sha512.sha512_operation);
+        memset(&ctx->sha512.sha512_operation, 0, sizeof(ctx->sha512.sha512_operation));
+        ctx->sha512.sha512_active = false;
+
+        return -1;
+    }
+
+    return 0;
+}
+
+int ota_common_sha512_finish(OTA_common_ctx_t* ctx)
+{
+    if (!ctx)
+        return -1;
+
+    // Check if operation is initialized
+    if (!ctx->sha512.sha512_active)
+    {
+        ota_common_debug_log(ctx, NULL,
+                             "Error: SHA-512 operation not initialized\n");
+        return -1;
+    }
+
+    // Finalize hash calculation
+    size_t hash_length = 0;
+    psa_status_t status = psa_hash_finish(&ctx->sha512.sha512_operation,
+                                          ctx->sha512.sha512_hash,
+                                          sizeof(ctx->sha512.sha512_hash),
+                                          &hash_length);
+    if (status != PSA_SUCCESS)
+    {
+        ota_common_debug_log(ctx, NULL,
+                             "Error: Failed to finish SHA-512: %d\n",
+                             (int)status);
+
+        psa_hash_abort(&ctx->sha512.sha512_operation);
+        memset(&ctx->sha512.sha512_operation, 0, sizeof(ctx->sha512.sha512_operation));
+        ctx->sha512.sha512_active = false;
+
+        return -1;
+    }
+
+    if (hash_length != sizeof(ctx->sha512.sha512_hash))
+    {
+        ota_common_debug_log(ctx, NULL,
+                             "Error: SHA-512 hash length mismatch: "
+                             "expected %zu, got %zu\n",
+                             sizeof(ctx->sha512.sha512_hash), hash_length);
+
+        psa_hash_abort(&ctx->sha512.sha512_operation);
+        memset(&ctx->sha512.sha512_operation, 0, sizeof(ctx->sha512.sha512_operation));
+        ctx->sha512.sha512_active = false;
+
+        return -1;
+    }
+
+    ctx->sha512.sha512_calculated = true;
+    ctx->sha512.sha512_active = false; // Operation is finished, no longer active
+
+    ota_common_debug_log(ctx, NULL,
+                         "SHA-512 hash calculation completed\n");
+
+    return 0;
+}
+
+int ota_common_sha512_sign(OTA_common_ctx_t* ctx)
+{
+    if (!ctx)
+        return -1;
+
+    // Check if hash is calculated
+    if (!ctx->sha512.sha512_calculated)
+    {
+        ota_common_debug_log(ctx, NULL,
+                             "Error: Cannot sign - SHA-512 hash not calculated\n");
+        return -1;
+    }
+
+    // Check if already signed
+    if (ctx->sha512.sha512_signed)
+    {
+        ota_common_debug_log(ctx, NULL,
+                             "Warning: SHA-512 hash already signed\n");
+        return 0;
+    }
+
+    // Check if private key is set
+    if (!ctx->sha512.sha512_private_key)
+    {
+        ota_common_debug_log(ctx, NULL,
+                             "Error: Cannot sign - private key not set (pointer is NULL)\n");
+        return -1;
+    }
+
+    ota_common_debug_log(ctx, NULL,
+                         "Private key is set, proceeding with signing\n");
+
+    // Use SHA-512 as the hash algorithm
+    size_t signature_len = 0;
+    int ret = mbedtls_pk_sign(ctx->sha512.sha512_private_key,
+                              MBEDTLS_MD_SHA512,
+                              ctx->sha512.sha512_hash,
+                              sizeof(ctx->sha512.sha512_hash),
+                              ctx->sha512.sha512_signature,
+                              sizeof(ctx->sha512.sha512_signature),
+                              &signature_len);
+
+    if (ret != 0)
+    {
+        char error_buf[256];
+        mbedtls_strerror(ret, error_buf, sizeof(error_buf));
+        ota_common_debug_log(ctx, NULL,
+                             "Error: Failed to sign SHA-512 hash: %d (%s)\n",
+                             ret, error_buf);
+        return -1;
+    }
+
+    // Validate signature length matches protocol requirement
+    if (signature_len != OTA_SHA512_SIGNATURE_LENGTH)
+    {
+        ota_common_debug_log(ctx, NULL,
+                             "Error: Signature length mismatch: expected %d, got %zu\n",
+                             OTA_SHA512_SIGNATURE_LENGTH, signature_len);
+        return -1;
+    }
+
+    ctx->sha512.sha512_signature_length = signature_len;
+    ctx->sha512.sha512_signed = true;
+
+    ota_common_debug_log(ctx, NULL,
+                         "SHA-512 hash signed successfully (%zu bytes)\n",
+                         signature_len);
+
+    return 0;
+}
+
+int ota_common_sha512_verify(OTA_common_ctx_t* ctx,
+                             const uint8_t* signature,
+                             size_t signature_len)
+{
+    if (!ctx)
+        return -1;
+
+    if (!signature)
+    {
+        ota_common_debug_log(ctx, NULL,
+                             "Error: Cannot verify - signature is NULL\n");
+        return -1;
+    }
+
+    // Validate signature length matches protocol requirement
+    if (signature_len != OTA_SHA512_SIGNATURE_LENGTH)
+    {
+        ota_common_debug_log(ctx, NULL,
+                             "Error: Signature length mismatch: expected %d, got %zu\n",
+                             OTA_SHA512_SIGNATURE_LENGTH, signature_len);
+        return -1;
+    }
+
+    // Check if hash is calculated
+    if (!ctx->sha512.sha512_calculated)
+    {
+        ota_common_debug_log(ctx, NULL,
+                             "Error: Cannot verify - SHA-512 hash not calculated\n");
+        return -1;
+    }
+
+    // Check if public key is set
+    if (!ctx->sha512.sha512_public_key)
+    {
+        ota_common_debug_log(ctx, NULL,
+                             "Error: Cannot verify - "
+                             "public key not set (pointer is NULL)\n");
+        return -1;
+    }
+
+    ota_common_debug_log(ctx, NULL,
+                         "Public key is set (pointer: %p), "
+                         "proceeding with verification\n",
+                         (void*)ctx->sha512.sha512_public_key);
+
+    // Verify signature using public key
+    ota_common_debug_log(ctx, NULL,
+                         "Verifying signature against calculated hash...\n");
+
+    int ret = mbedtls_pk_verify(ctx->sha512.sha512_public_key,
+                                MBEDTLS_MD_SHA512,
+                                ctx->sha512.sha512_hash,
+                                sizeof(ctx->sha512.sha512_hash),
+                                signature,
+                                signature_len);
+
+    if (ret != 0)
+    {
+        char error_buf[256];
+        mbedtls_strerror(ret, error_buf, sizeof(error_buf));
+        ota_common_debug_log(ctx, NULL,
+                             "Error: Signature verification failed: %d (%s)\n",
+                             ret, error_buf);
+        ota_common_debug_log(ctx, NULL,
+                             "Hash does not match - signature verification failed\n");
+        return -1;
+    }
+
+    ota_common_debug_log(ctx, NULL,
+                         "Hash matches - SHA-512 signature verification successful\n");
+
+    return 0;
+}
+
+void ota_common_sha512_cleanup(OTA_common_ctx_t* ctx)
+{
+    if (!ctx)
+        return;
+
+    // Abort any active hash operation
+    if (ctx->sha512.sha512_active)
+    {
+        psa_hash_abort(&ctx->sha512.sha512_operation);
+    }
+
+    // Reset operation to initial state (zero-initialize)
+    memset(&ctx->sha512.sha512_operation, 0, sizeof(ctx->sha512.sha512_operation));
+
+    // Reset hash result and flags
+    memset(ctx->sha512.sha512_hash, 0, sizeof(ctx->sha512.sha512_hash));
+    ctx->sha512.sha512_calculated = false;
+    ctx->sha512.sha512_active = false;
+
+    // Reset signature
+    memset(ctx->sha512.sha512_signature, 0, sizeof(ctx->sha512.sha512_signature));
+    ctx->sha512.sha512_signature_length = 0;
+    ctx->sha512.sha512_signed = false;
+
+    // Free private key if allocated
+    if (ctx->sha512.sha512_private_key)
+    {
+        mbedtls_pk_free(ctx->sha512.sha512_private_key);
+        free(ctx->sha512.sha512_private_key);
+        ctx->sha512.sha512_private_key = NULL;
+    }
+
+    // Free public key if allocated
+    if (ctx->sha512.sha512_public_key)
+    {
+        mbedtls_pk_free(ctx->sha512.sha512_public_key);
+        free(ctx->sha512.sha512_public_key);
+        ctx->sha512.sha512_public_key = NULL;
+    }
+}
+
+// helper function to set a key (private or public)
+// is_private: true for private key, false for public key
+// Returns: 0 on success, negative value on error
+static int ota_common_set_pk_key(OTA_common_ctx_t* ctx,
+                                  mbedtls_pk_context** key_ptr,
+                                  const unsigned char* key_data,
+                                  size_t key_len,
+                                  bool is_private,
+                                  const char* key_type_name,
+                                  const char* operation_name)
+{
+    if (!ctx      ||
+        !key_ptr  ||
+        !key_data ||
+         key_len == 0)
+    {
+        return -1;
+    }
+
+    // Ensure PSA crypto is initialized (required for key parsing)
+    int init_ret = ota_common_ensure_psa_crypto_init();
+    if (init_ret != 0)
+    {
+        ota_common_debug_log(ctx, NULL,
+                             "Error: psa_crypto_init() failed: %d\n",
+                             -init_ret);
+        return -1;
+    }
+
+    // Free existing key if present
+    if (*key_ptr)
+    {
+        mbedtls_pk_free(*key_ptr);
+        free(*key_ptr);
+        *key_ptr = NULL;
+    }
+
+    // Allocate new PK context
+    *key_ptr = malloc(sizeof(mbedtls_pk_context));
+    if (!*key_ptr)
+    {
+        ota_common_debug_log(ctx, NULL,
+                             "Error: Failed to allocate PK context"
+                             " for SHA-512 %s\n",
+                             operation_name);
+        return -1;
+    }
+
+    // Initialize PK context
+    mbedtls_pk_init(*key_ptr);
+
+    // Parse key (supports PEM and DER formats)
+    ota_common_debug_log(ctx, NULL,
+                         "Parsing %s key for SHA-512 %s (length: %zu bytes)\n",
+                         key_type_name, operation_name, key_len);
+
+    int ret;
+    if (is_private)
+    {
+        ret = mbedtls_pk_parse_key(*key_ptr, key_data, key_len, NULL, 0);
+    }
+    else
+    {
+        ret = mbedtls_pk_parse_public_key(*key_ptr, key_data, key_len);
+    }
+
+    if (ret != 0)
+    {
+        char error_buf[256];
+        mbedtls_strerror(ret, error_buf, sizeof(error_buf));
+
+        ota_common_debug_log(ctx, NULL,
+                             "Error: Failed to parse %s key for SHA-512 %s: "
+                             "%d (%s)\n",
+                             key_type_name, operation_name, ret, error_buf);
+
+        mbedtls_pk_free(*key_ptr);
+        free(*key_ptr);
+        *key_ptr = NULL;
+
+        return -1;
+    }
+
+    ota_common_debug_log(ctx, NULL,
+                         "%s key set for SHA-512 %s (pointer: %p)\n",
+                         key_type_name, operation_name, (void*)*key_ptr);
+
+    return 0;
+}
+
+int OTA_set_sha512_private_key(OTA_common_ctx_t* ctx,
+                               const unsigned char* key_data,
+                               size_t key_len)
+{
+    return ota_common_set_pk_key(ctx,
+                                 &ctx->sha512.sha512_private_key,
+                                 key_data,
+                                 key_len,
+                                 true, // is_private = true
+                                 "private",
+                                 "signing");
+}
+
+int OTA_set_sha512_public_key(OTA_common_ctx_t* ctx,
+                              const unsigned char* key_data,
+                              size_t key_len)
+{
+    return ota_common_set_pk_key(ctx,
+                                 &ctx->sha512.sha512_public_key,
+                                 key_data,
+                                 key_len,
+                                 false, // is_private = false
+                                 "public",
+                                 "verification");
 }
