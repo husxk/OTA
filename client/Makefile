@@ -24,7 +24,12 @@ checkenv_%:
 
 pico_sdk: checkenv_PICO_SDK_PATH checkenv_PICO_EXTRAS_PATH
 
-build/: ./configure_wifi.sh wlan.ini pico_sdk
+# Generate signing key header before build
+signing_key.h: ../build/signing.pub scripts/generate_signing_key_header.sh
+	@echo "Generating signing key header..."
+	@scripts/generate_signing_key_header.sh ../build/signing.pub
+
+build/: ./configure_wifi.sh wlan.ini pico_sdk signing_key.h
 	CFLAGS="$(CFLAGS)" \
 	CONFIG_HOSTNAME=$(CONFIG_HOSTNAME) \
 	PKG_CONFIG_PATH=../build/pico/lib/pkgconfig \

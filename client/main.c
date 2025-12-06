@@ -47,7 +47,7 @@ init_leds(void)
   gpio_set_dir(13, GPIO_OUT);
   gpio_set_dir(15, GPIO_OUT);
 
-  gpio_put(13, 1);
+//  gpio_put(13, 1);
   gpio_put(15, 1);
 }
 

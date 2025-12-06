@@ -1,4 +1,5 @@
 build/
 wlan.ini
+signing_key.h
 
 cmake/memmap.ld

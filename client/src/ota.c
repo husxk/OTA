@@ -1,10 +1,12 @@
 #include <string.h>
 #include <stdarg.h>
+#include <stddef.h>
 
 #include "ota.h"
 #include "device.h"
 #include "tcp.h"
 #include "debug.h"
+#include "signing_key.h"
 
 #include "pico/stdlib.h"
 #include "pico/rand.h"
@@ -245,7 +247,7 @@ int init_ota(OTA_client_ctx* ctx)
     ctx->common.callbacks.debug_log_cb        = debug_log;
 
     // Set client storage callbacks
-    ctx->transfer_store_cb = transfer_store;
+    ctx->transfer_store_cb  = transfer_store;
     ctx->transfer_reset_cb  = transfer_reset;
 
     // Set firmware update callbacks (RAM resident functions)
@@ -253,6 +255,18 @@ int init_ota(OTA_client_ctx* ctx)
     ctx->firmware_read_cb    = firmware_read;
     ctx->firmware_prepare_cb = firmware_prepare;
     ctx->firmware_write_cb   = firmware_write;
+
+    // Set public key for SHA-512 signature verification
+    const char* key_data_str = SIGNING_PUBLIC_KEY_DATA;
+    size_t key_data_len = strlen(key_data_str) + 1;  // Include null terminator
+
+    if (OTA_set_sha512_public_key(&ctx->common,
+                                  (const unsigned char*)key_data_str,
+                                   key_data_len) != 0)
+    {
+        DEBUG("OTA: Failed to set SHA-512 public key for verification\n");
+        return -1;
+    }
 
     // Initialize TLS context (client mode)
     // Must be called after all callbacks are set
