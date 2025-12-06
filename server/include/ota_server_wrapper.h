@@ -19,6 +19,7 @@ public:
 
     bool load_file(const std::string& file_path);
     bool load_pki(const std::string& cert_path, const std::string& key_path);
+    bool load_signing_key(const std::string& signing_key_path);
     bool init();
     bool run(uint16_t port);
 
@@ -57,9 +58,12 @@ private:
     std::unique_ptr<file_reader> reader;
     file_wrapper urandom_file;
 
-    // PKI data (certificate and private key)
+    // PKI data (certificate and private key for TLS)
     std::vector<unsigned char> cert_data;
     std::vector<unsigned char> key_data;
+
+    // Signing key for image verification (separate from TLS key)
+    std::vector<unsigned char> signing_key_data;
 
     // OTA server context (initialized in init())
     OTA_server_ctx ota_ctx;

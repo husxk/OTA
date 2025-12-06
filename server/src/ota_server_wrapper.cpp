@@ -203,6 +203,43 @@ bool server_context::load_pki(const std::string& cert_path,
     return true;
 }
 
+bool server_context::load_signing_key(const std::string& signing_key_path)
+{
+    // Read signing key file
+    std::ifstream key_file(signing_key_path, std::ios::binary);
+    if (!key_file.is_open())
+    {
+        printf("Error: Cannot open signing key file '%s'\n",
+               signing_key_path.c_str());
+        return false;
+    }
+
+    this->signing_key_data = std::vector<unsigned char>(
+        std::istreambuf_iterator<char>(key_file),
+        std::istreambuf_iterator<char>());
+
+    key_file.close();
+
+    // Ensure null terminator for mbedTLS PEM parsing
+    if (!this->signing_key_data.empty() &&
+        this->signing_key_data.back() != '\0')
+    {
+        this->signing_key_data.push_back('\0');
+    }
+
+    if (this->signing_key_data.empty())
+    {
+        printf("Error: Signing key file '%s' is empty\n",
+               signing_key_path.c_str());
+        return false;
+    }
+
+    printf("Loaded signing key (%zu bytes)\n",
+           this->signing_key_data.size());
+
+    return true;
+}
+
 bool server_context::init()
 {
     // Initialize OTA server context structure
@@ -227,6 +264,13 @@ void server_context::init_ota_server(OTA_server_ctx* ctx)
 
     std::memset(ctx, 0, sizeof(*ctx));
 
+    // Set common transfer callbacks
+    ctx->common.callbacks.transfer_send_cb    = transfer_send;
+    ctx->common.callbacks.transfer_receive_cb = transfer_receive;
+    ctx->common.callbacks.transfer_error_cb   = transfer_error;
+    ctx->common.callbacks.transfer_done_cb    = transfer_done;
+    ctx->common.callbacks.debug_log_cb        = debug_log;
+
     // Set entropy callback for TLS
     // Pass 'this' as context so entropy_callback can access urandom_file
     OTA_set_entropy_cb(entropy_callback, this);
@@ -250,12 +294,23 @@ void server_context::init_ota_server(OTA_server_ctx* ctx)
                      key_data.data(),
                      key_data.size());
 
-    // Set common transfer callbacks
-    ctx->common.callbacks.transfer_send_cb    = transfer_send;
-    ctx->common.callbacks.transfer_receive_cb = transfer_receive;
-    ctx->common.callbacks.transfer_error_cb   = transfer_error;
-    ctx->common.callbacks.transfer_done_cb    = transfer_done;
-    ctx->common.callbacks.debug_log_cb        = debug_log;
+   // Set private key for SHA-512 signing (separate from TLS key)
+    if (signing_key_data.empty())
+    {
+        printf("Error: Signing key data is empty. "
+               "Call load_signing_key() before init()\n");
+        exit(1);
+    }
+
+    if (OTA_set_sha512_private_key(&ctx->common,
+                                    signing_key_data.data(),
+                                    signing_key_data.size()) != 0)
+    {
+        printf("Error: Failed to set SHA-512 private key for signing\n");
+        exit(1);
+    }
+
+    printf("SHA-512 signing private key loaded successfully\n");
 
     // Set server-specific callbacks
     ctx->server_get_payload_cb       = server_get_payload;
