@@ -6,71 +6,6 @@
 #include <mbedtls/error.h>
 #include <stdarg.h>
 
-static bool ota_send_fin_packet_server(OTA_server_ctx* ctx,
-                                       void* user_ctx)
-{
-    uint8_t fin_buffer[OTA_FIN_PACKET_LENGTH];
-
-    // Check if signature is available and has correct length
-    if (!ctx->common.sha512.sha512_signed)
-    {
-        ctx->common.callbacks.transfer_error_cb(user_ctx,
-                                                "Cannot send FIN packet: "
-                                                "signature not calculated");
-        return false;
-    }
-
-    if (ctx->common.sha512.sha512_signature_length != OTA_SHA512_SIGNATURE_LENGTH)
-    {
-        ctx->common.callbacks.transfer_error_cb(user_ctx,
-                                                "Cannot send FIN packet: "
-                                                "invalid signature length");
-        return false;
-    }
-
-    size_t fin_size = OTA_packet_write_fin(fin_buffer,
-                                           sizeof(fin_buffer),
-                                           ctx->common.sha512.sha512_signature,
-                                           ctx->common.sha512.sha512_signature_length);
-
-    if (fin_size == 0)
-    {
-        ctx->common.callbacks.transfer_error_cb(user_ctx,
-                                                "Failed to create FIN packet");
-        return false;
-    }
-
-    OTA_send_data(&ctx->common, user_ctx, fin_buffer, fin_size);
-    ota_common_debug_log(&ctx->common, user_ctx,
-                         "OTA: FIN packet sent with signature\n");
-    return true;
-}
-
-static bool ota_send_data_packet_server(OTA_server_ctx* ctx,
-                                        void* user_ctx,
-                                        const uint8_t* data,
-                                        size_t size)
-{
-    uint8_t send_buffer[OTA_DATA_PACKET_LENGTH];
-    size_t bytes_written =
-        OTA_packet_write_data(send_buffer,
-                              sizeof(send_buffer),
-                              data,
-                              size);
-
-    if (bytes_written == 0)
-    {
-        ctx->common.callbacks.transfer_error_cb(user_ctx,
-                                                "Failed to create DATA packet");
-        return false;
-    }
-
-    OTA_send_data(&ctx->common, user_ctx, send_buffer, bytes_written);
-    ota_common_debug_log(&ctx->common, user_ctx,
-                         "OTA: DATA packet sent (%zu bytes)\n", size);
-    return true;
-}
-
 static bool ota_wait_for_response_server(OTA_server_ctx* ctx,
                                          void* user_ctx,
                                          uint8_t expected_type)
@@ -239,7 +174,7 @@ bool OTA_server_run_transfer(OTA_server_ctx* ctx, void* user_ctx)
             ota_common_debug_log(&ctx->common, user_ctx,
                                  "OTA: No more data, sending FIN packet\n");
 
-            if (!ota_send_fin_packet_server(ctx, user_ctx))
+            if (!ota_send_fin_packet(&ctx->common, user_ctx))
             {
                 return false;
             }
@@ -255,12 +190,12 @@ bool OTA_server_run_transfer(OTA_server_ctx* ctx, void* user_ctx)
         // Update SHA-512 hash with data chunk (before sending)
         ota_common_sha512_update(&ctx->common, data, size);
 
-        if (!ota_send_data_packet_server(ctx, user_ctx, data, size))
+        if (!ota_send_data_packet(&ctx->common, user_ctx, data, size))
         {
             return false;
         }
 
-        if (!ota_wait_for_response_server(ctx, user_ctx, OTA_ACK_TYPE))
+        if (!ota_wait_for_response_server(ctx, user_ctx, 0x01)) // OTA_ACK_TYPE
         {
             return false;
         }

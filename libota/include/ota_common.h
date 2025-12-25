@@ -184,6 +184,29 @@ int OTA_set_sha512_public_key(OTA_common_ctx_t* ctx,
                               const unsigned char* key_data,
                               size_t key_len);
 
+// Send DATA packet
+// data: Pointer to data to send
+// size: Size of data to send
+// user_ctx: User context for callbacks
+// Returns: true on success, false on error
+bool ota_send_data_packet(OTA_common_ctx_t* ctx,
+                          void* user_ctx,
+                          const uint8_t* data,
+                          size_t size);
+
+// Send ACK packet
+// user_ctx: User context for callbacks
+void ota_send_ack_packet(OTA_common_ctx_t* ctx, void* user_ctx);
+
+// Send NACK packet
+// user_ctx: User context for callbacks
+void ota_send_nack_packet(OTA_common_ctx_t* ctx, void* user_ctx);
+
+// Send FIN packet with signature
+// user_ctx: User context for callbacks
+// Returns: true on success, false on error
+bool ota_send_fin_packet(OTA_common_ctx_t* ctx, void* user_ctx);
+
 #ifdef __cplusplus
 }
 #endif

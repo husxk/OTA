@@ -108,26 +108,6 @@ bool OTA_RAM_FUNCTION(OTA_client_write_firmware)(OTA_client_ctx* ctx,
     return true;
 }
 
-static void send_ack_packet_client(OTA_client_ctx* ctx, void* user_ctx)
-{
-    uint8_t ack_buffer[OTA_ACK_PACKET_LENGTH];
-    size_t ack_size = OTA_packet_write_ack(ack_buffer, sizeof(ack_buffer));
-    if (ack_size > 0)
-    {
-        OTA_send_data(&ctx->common, user_ctx, ack_buffer, ack_size);
-    }
-}
-
-static void send_nack_packet_client(OTA_client_ctx* ctx, void* user_ctx)
-{
-    uint8_t nack_buffer[OTA_NACK_PACKET_LENGTH];
-    size_t nack_size = OTA_packet_write_nack(nack_buffer, sizeof(nack_buffer));
-    if (nack_size > 0)
-    {
-        OTA_send_data(&ctx->common, user_ctx, nack_buffer, nack_size);
-    }
-}
-
 static bool OTA_client_handle_data_packet(OTA_client_ctx* ctx,
                                           void* user_ctx,
                                           const uint8_t* buffer,
@@ -148,7 +128,7 @@ static bool OTA_client_handle_data_packet(OTA_client_ctx* ctx,
     {
         ctx->common.callbacks.transfer_error_cb(user_ctx, "Invalid packet format");
         ctx->transfer_reset_cb(user_ctx);
-        send_nack_packet_client(ctx, user_ctx);
+        ota_send_nack_packet(&ctx->common, user_ctx);
         return false;
     }
 
@@ -161,12 +141,12 @@ static bool OTA_client_handle_data_packet(OTA_client_ctx* ctx,
         ctx->common.callbacks.transfer_error_cb(user_ctx,
                                                 "Failed to write data to storage");
         ctx->transfer_reset_cb(user_ctx);
-        send_nack_packet_client(ctx, user_ctx);
+        ota_send_nack_packet(&ctx->common, user_ctx);
         return false;
     }
 
     // Success, send ACK
-    send_ack_packet_client(ctx, user_ctx);
+    ota_send_ack_packet(&ctx->common, user_ctx);
     return true;
 }
 
@@ -451,13 +431,7 @@ bool OTA_client_handle_data(OTA_client_ctx* ctx,
             }
 
             // Send ACK for FIN packet
-            uint8_t ack_buffer[OTA_ACK_PACKET_LENGTH];
-            size_t ack_size = OTA_packet_write_ack(ack_buffer, sizeof(ack_buffer));
-
-            if (ack_size > 0)
-            {
-                OTA_send_data(&ctx->common, user_ctx, ack_buffer, ack_size);
-            }
+            ota_send_ack_packet(&ctx->common, user_ctx);
 
             // Notify platform that transfer is complete
             ctx->common.callbacks.transfer_done_cb(user_ctx, 0);
@@ -477,13 +451,7 @@ bool OTA_client_handle_data(OTA_client_ctx* ctx,
             }
 
             // Send NACK for invalid packet
-            uint8_t nack_buffer[OTA_NACK_PACKET_LENGTH];
-            size_t nack_size = OTA_packet_write_nack(nack_buffer, sizeof(nack_buffer));
-
-            if (nack_size > 0)
-            {
-                OTA_send_data(&ctx->common, user_ctx, nack_buffer, nack_size);
-            }
+            ota_send_nack_packet(&ctx->common, user_ctx);
 
             return false;
     }

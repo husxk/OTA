@@ -1,6 +1,7 @@
 #include "ota_common.h"
 #include "tls_context.h"
 #include "protocol.h"
+#include "packet.h"
 #include <mbedtls/error.h>
 #include <mbedtls/ssl.h>
 #include <mbedtls/md.h>
@@ -617,4 +618,108 @@ int OTA_set_sha512_public_key(OTA_common_ctx_t* ctx,
                                  false, // is_private = false
                                  "public",
                                  "verification");
+}
+
+bool ota_send_data_packet(OTA_common_ctx_t* ctx,
+                          void* user_ctx,
+                          const uint8_t* data,
+                          size_t size)
+{
+    if (!ctx || !data || size == 0)
+    {
+        return false;
+    }
+
+    uint8_t send_buffer[OTA_DATA_PACKET_LENGTH];
+    size_t bytes_written =
+        OTA_packet_write_data(send_buffer,
+                              sizeof(send_buffer),
+                              data,
+                              size);
+
+    if (bytes_written == 0)
+    {
+        ctx->callbacks.transfer_error_cb(user_ctx,
+                                        "Failed to create DATA packet");
+        return false;
+    }
+
+    OTA_send_data(ctx, user_ctx, send_buffer, bytes_written);
+    ota_common_debug_log(ctx, user_ctx,
+                         "OTA: DATA packet sent (%zu bytes)\n", size);
+    return true;
+}
+
+void ota_send_ack_packet(OTA_common_ctx_t* ctx, void* user_ctx)
+{
+    if (!ctx)
+    {
+        return;
+    }
+
+    uint8_t ack_buffer[OTA_ACK_PACKET_LENGTH];
+    size_t ack_size = OTA_packet_write_ack(ack_buffer, sizeof(ack_buffer));
+    if (ack_size > 0)
+    {
+        OTA_send_data(ctx, user_ctx, ack_buffer, ack_size);
+    }
+}
+
+void ota_send_nack_packet(OTA_common_ctx_t* ctx, void* user_ctx)
+{
+    if (!ctx)
+    {
+        return;
+    }
+
+    uint8_t nack_buffer[OTA_NACK_PACKET_LENGTH];
+    size_t nack_size = OTA_packet_write_nack(nack_buffer, sizeof(nack_buffer));
+    if (nack_size > 0)
+    {
+        OTA_send_data(ctx, user_ctx, nack_buffer, nack_size);
+    }
+}
+
+bool ota_send_fin_packet(OTA_common_ctx_t* ctx, void* user_ctx)
+{
+    if (!ctx)
+    {
+        return false;
+    }
+
+    uint8_t fin_buffer[OTA_FIN_PACKET_LENGTH];
+
+    // Check if signature is available and has correct length
+    if (!ctx->sha512.sha512_signed)
+    {
+        ctx->callbacks.transfer_error_cb(user_ctx,
+                                        "Cannot send FIN packet: "
+                                        "signature not calculated");
+        return false;
+    }
+
+    if (ctx->sha512.sha512_signature_length != OTA_SHA512_SIGNATURE_LENGTH)
+    {
+        ctx->callbacks.transfer_error_cb(user_ctx,
+                                        "Cannot send FIN packet: "
+                                        "invalid signature length");
+        return false;
+    }
+
+    size_t fin_size = OTA_packet_write_fin(fin_buffer,
+                                           sizeof(fin_buffer),
+                                           ctx->sha512.sha512_signature,
+                                           ctx->sha512.sha512_signature_length);
+
+    if (fin_size == 0)
+    {
+        ctx->callbacks.transfer_error_cb(user_ctx,
+                                        "Failed to create FIN packet");
+        return false;
+    }
+
+    OTA_send_data(ctx, user_ctx, fin_buffer, fin_size);
+    ota_common_debug_log(ctx, user_ctx,
+                         "OTA: FIN packet sent with signature\n");
+    return true;
 }
