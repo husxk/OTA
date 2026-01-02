@@ -32,6 +32,19 @@ void ota_common_debug_log(OTA_common_ctx_t* ctx,
     va_end(args);
 }
 
+void ota_common_transfer_error(OTA_common_ctx_t* ctx,
+                                void* user_ctx,
+                                const char* error_msg)
+{
+    if (!ctx ||
+        !ctx->callbacks.transfer_error_cb)
+    {
+        return;
+    }
+
+    ctx->callbacks.transfer_error_cb(user_ctx, error_msg);
+}
+
 void OTA_send_data(OTA_common_ctx_t* ctx,
                    void* user_ctx,
                    const uint8_t* data,
@@ -639,8 +652,8 @@ bool ota_send_data_packet(OTA_common_ctx_t* ctx,
 
     if (bytes_written == 0)
     {
-        ctx->callbacks.transfer_error_cb(user_ctx,
-                                        "Failed to create DATA packet");
+        ota_common_transfer_error(ctx, user_ctx,
+                                  "Failed to create DATA packet");
         return false;
     }
 
@@ -692,17 +705,17 @@ bool ota_send_fin_packet(OTA_common_ctx_t* ctx, void* user_ctx)
     // Check if signature is available and has correct length
     if (!ctx->sha512.sha512_signed)
     {
-        ctx->callbacks.transfer_error_cb(user_ctx,
-                                        "Cannot send FIN packet: "
-                                        "signature not calculated");
+        ota_common_transfer_error(ctx, user_ctx,
+                                  "Cannot send FIN packet: "
+                                  "signature not calculated");
         return false;
     }
 
     if (ctx->sha512.sha512_signature_length != OTA_SHA512_SIGNATURE_LENGTH)
     {
-        ctx->callbacks.transfer_error_cb(user_ctx,
-                                        "Cannot send FIN packet: "
-                                        "invalid signature length");
+        ota_common_transfer_error(ctx, user_ctx,
+                                  "Cannot send FIN packet: "
+                                  "invalid signature length");
         return false;
     }
 
@@ -713,8 +726,8 @@ bool ota_send_fin_packet(OTA_common_ctx_t* ctx, void* user_ctx)
 
     if (fin_size == 0)
     {
-        ctx->callbacks.transfer_error_cb(user_ctx,
-                                        "Failed to create FIN packet");
+        ota_common_transfer_error(ctx, user_ctx,
+                                  "Failed to create FIN packet");
         return false;
     }
 

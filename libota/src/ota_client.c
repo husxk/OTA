@@ -126,7 +126,7 @@ static bool OTA_client_handle_data_packet(OTA_client_ctx* ctx,
     const uint8_t* payload = OTA_packet_get_data(buffer, size);
     if (payload == NULL)
     {
-        ctx->common.callbacks.transfer_error_cb(user_ctx, "Invalid packet format");
+        ota_common_transfer_error(&ctx->common, user_ctx, "Invalid packet format");
         ctx->transfer_reset_cb(user_ctx);
         ota_send_nack_packet(&ctx->common, user_ctx);
         return false;
@@ -138,8 +138,8 @@ static bool OTA_client_handle_data_packet(OTA_client_ctx* ctx,
     // Write data to storage
     if (!ctx->transfer_store_cb(user_ctx, payload, OTA_DATA_PAYLOAD_SIZE))
     {
-        ctx->common.callbacks.transfer_error_cb(user_ctx,
-                                                "Failed to write data to storage");
+        ota_common_transfer_error(&ctx->common, user_ctx,
+                                  "Failed to write data to storage");
         ctx->transfer_reset_cb(user_ctx);
         ota_send_nack_packet(&ctx->common, user_ctx);
         return false;
@@ -408,8 +408,9 @@ bool OTA_client_handle_data(OTA_client_ctx* ctx,
                 {
                     ctx->transfer_reset_cb(user_ctx);
                 }
-                ctx->common.callbacks.transfer_error_cb(user_ctx,
-                                                        "Invalid FIN packet signature");
+
+                ota_common_transfer_error(&ctx->common, user_ctx,
+                                          "Invalid FIN packet signature");
                 return false;
             }
 
@@ -425,8 +426,9 @@ bool OTA_client_handle_data(OTA_client_ctx* ctx,
                 {
                     ctx->transfer_reset_cb(user_ctx);
                 }
-                ctx->common.callbacks.transfer_error_cb(user_ctx,
-                                                        "Signature verification failed");
+
+                ota_common_transfer_error(&ctx->common, user_ctx,
+                                          "Signature verification failed");
                 return false;
             }
 

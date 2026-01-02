@@ -95,6 +95,11 @@ void ota_common_debug_log(OTA_common_ctx_t* ctx,
                           const char* format,
                           ...);
 
+// Common transfer error logging function
+void ota_common_transfer_error(OTA_common_ctx_t* ctx,
+                               void* user_ctx,
+                               const char* error_msg);
+
 // Common send wrapper function
 // Uses TLS if available, otherwise calls transfer_send_cb
 void OTA_send_data(OTA_common_ctx_t* ctx,

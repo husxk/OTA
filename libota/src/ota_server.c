@@ -37,8 +37,8 @@ static bool ota_wait_for_response_server(OTA_server_ctx* ctx,
 
     if (response_size == 0)
     {
-        ctx->common.callbacks.transfer_error_cb(user_ctx,
-                                                "No response received: timeout");
+        ota_common_transfer_error(&ctx->common, user_ctx,
+                                  "No response received: timeout");
         return false;
     }
 
@@ -48,13 +48,13 @@ static bool ota_wait_for_response_server(OTA_server_ctx* ctx,
     {
         if (packet_type == OTA_NACK_TYPE)
         {
-            ctx->common.callbacks.transfer_error_cb(user_ctx,
-                                                    "Received NACK");
+            ota_common_transfer_error(&ctx->common, user_ctx,
+                                      "Received NACK");
         }
         else
         {
-            ctx->common.callbacks.transfer_error_cb(user_ctx,
-                                                    "Invalid response");
+            ota_common_transfer_error(&ctx->common, user_ctx,
+                                      "Invalid response");
         }
 
         return false;
