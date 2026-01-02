@@ -1,8 +1,8 @@
 #include "ota_server.h"
 #include "ota_common.h"
-#include "tls_context.h"
 #include "packet.h"
 #include "protocol.h"
+#include <mbedtls/ssl.h>
 #include <mbedtls/error.h>
 #include <stdarg.h>
 
@@ -17,6 +17,8 @@ static bool ota_wait_for_response_server(OTA_server_ctx* ctx,
     // TLS may need multiple read attempts
     // when MBEDTLS_ERR_SSL_WANT_READ/WRITE is returned
 
+    // TODO: Do we even need this loop? Shouldnt we fix APi
+    // to get error msg from lower level and handle it correcttly?
     // TODO: switch this to time based timeout
     const int max_retries = 1000; // Reasonable limit to avoid infinite loop
     int retry_count = 0;
@@ -66,35 +68,6 @@ static bool ota_wait_for_response_server(OTA_server_ctx* ctx,
     return true;
 }
 
-// Perform TLS handshake
-// Returns: true on success, false on error
-static bool ota_server_handshake(OTA_server_ctx* ctx, void* user_ctx)
-{
-    if (!ctx ||
-        !user_ctx)
-    {
-        return false;
-    }
-
-    // Set user context for TLS
-    ctx->common.tls.user_ctx = user_ctx;
-
-    // Perform TLS handshake
-    // Server needs to complete handshake before starting transfer
-    int ret;
-
-    while ((ret = tls_context_handshake(&ctx->common.tls)) != 0)
-    {
-        if (ret != MBEDTLS_ERR_SSL_WANT_READ &&
-            ret != MBEDTLS_ERR_SSL_WANT_WRITE)
-        {
-            ctx->common.callbacks.transfer_error_cb(user_ctx, "TLS handshake failed");
-            return false;
-        }
-    }
-
-    return true;
-}
 
 int OTA_server_init(OTA_server_ctx* ctx)
 {
@@ -104,7 +77,7 @@ int OTA_server_init(OTA_server_ctx* ctx)
     }
 
     // Check if PKI data is set
-    if (!tls_is_pki_data_set(&ctx->common.tls))
+    if (!ota_tls_is_pki_data_set(&ctx->common))
     {
         ota_common_debug_log(&ctx->common, NULL,
                              "Error: PKI data not set. "
@@ -137,8 +110,8 @@ bool OTA_server_run_transfer(OTA_server_ctx* ctx, void* user_ctx)
         return false;
     }
 
-    // Perform TLS handshake
-    if (!ota_server_handshake(ctx, user_ctx))
+    // Perform TLS handshake (blocking mode)
+    if (!ota_common_tls_handshake(&ctx->common, user_ctx, true))
     {
         return false;
     }
@@ -214,7 +187,7 @@ bool OTA_server_run_transfer(OTA_server_ctx* ctx, void* user_ctx)
     ctx->common.callbacks.transfer_done_cb(user_ctx, total_bytes_sent);
 
     // Close TLS connection gracefully
-    tls_context_close(&ctx->common.tls);
+    ota_tls_close(&ctx->common);
 
     return true;
 }

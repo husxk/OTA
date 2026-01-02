@@ -65,6 +65,16 @@ int tls_context_handshake(tls_context_t* ctx);
 // Returns: true if handshake is complete, false otherwise
 bool tls_context_handshake_complete(tls_context_t* ctx);
 
+// Set user context for TLS callbacks
+void tls_context_set_user_context(tls_context_t* ctx, void* user_ctx);
+
+// Set OTA context for TLS callbacks
+void tls_context_set_ota_context(tls_context_t* ctx, OTA_common_ctx_t* ota_ctx);
+
+// Check if TLS context is initialized
+// Returns: true if initialized, false otherwise
+bool tls_context_is_initialized(tls_context_t* ctx);
+
 // Send data through TLS connection
 // Returns: number of bytes sent on success, negative value on error
 int tls_context_send(tls_context_t* ctx,

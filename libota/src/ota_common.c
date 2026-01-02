@@ -58,7 +58,7 @@ void OTA_send_data(OTA_common_ctx_t* ctx,
     }
 
     // Use TLS if available, otherwise use plain callback
-    if (ctx->tls.initialized)
+    if (ota_tls_is_initialized(ctx))
     {
         tls_context_send(&ctx->tls, data, size);
     }
@@ -68,6 +68,8 @@ void OTA_send_data(OTA_common_ctx_t* ctx,
     }
 }
 
+// TODO: We should collect data and create packet from it.
+// Data could come fragmented or sth?
 size_t OTA_recv_data(OTA_common_ctx_t* ctx,
                      void* user_ctx,
                      uint8_t* buffer,
@@ -81,8 +83,15 @@ size_t OTA_recv_data(OTA_common_ctx_t* ctx,
     }
 
     // Use TLS if available, otherwise use plain callback
-    if (ctx->tls.initialized)
+    if (ota_tls_is_initialized(ctx))
     {
+        // Set user context if provided (needed for TLS callbacks)
+        if (user_ctx)
+        {
+            ota_tls_set_user_context(ctx, user_ctx);
+        }
+
+        // Handshake checking is done inside tls_context_receive
         int ret = tls_context_receive(&ctx->tls, buffer, max_size);
 
         if (ret < 0)
@@ -123,13 +132,166 @@ int ota_common_ensure_psa_crypto_init(void)
     return 0;
 }
 
-int OTA_set_pki_data(tls_context_t* ctx,
+int OTA_set_pki_data(OTA_common_ctx_t* ctx,
                      const unsigned char* cert_data,
                      size_t cert_len,
                      const unsigned char* key_data,
                      size_t key_len)
 {
-    return tls_set_pki_data(ctx, cert_data, cert_len, key_data, key_len);
+    if (!ctx)
+        return -1;
+
+    return tls_set_pki_data(&ctx->tls, cert_data, cert_len, key_data, key_len);
+}
+
+bool ota_tls_is_pki_data_set(OTA_common_ctx_t* ctx)
+{
+    if (!ctx)
+        return false;
+
+    return tls_is_pki_data_set(&ctx->tls);
+}
+
+bool ota_tls_is_initialized(OTA_common_ctx_t* ctx)
+{
+    if (!ctx)
+        return false;
+
+    return tls_context_is_initialized(&ctx->tls);
+}
+
+void ota_tls_set_user_context(OTA_common_ctx_t* ctx, void* user_ctx)
+{
+    if (!ctx)
+        return;
+
+    tls_context_set_user_context(&ctx->tls, user_ctx);
+}
+
+bool ota_tls_is_handshake_complete(OTA_common_ctx_t* ctx)
+{
+    if (!ctx)
+        return false;
+
+    return tls_context_handshake_complete(&ctx->tls);
+}
+
+int ota_tls_close(OTA_common_ctx_t* ctx)
+{
+    if (!ctx)
+        return -1;
+
+    return tls_context_close(&ctx->tls);
+}
+
+static int ota_tls_handshake(OTA_common_ctx_t* ctx, void* user_ctx)
+{
+    if (!ctx)
+        return -1;
+
+    // Set user context if provided
+    if (user_ctx)
+    {
+        ota_tls_set_user_context(ctx, user_ctx);
+    }
+
+    return tls_context_handshake(&ctx->tls);
+}
+
+static bool ota_common_tls_handshake_blocking(OTA_common_ctx_t* ctx,
+                                              void* user_ctx)
+{
+    // Blocking mode: loop until handshake completes
+    int ret;
+    while ((ret = ota_tls_handshake(ctx, user_ctx)) != 0)
+    {
+        if (ret != MBEDTLS_ERR_SSL_WANT_READ &&
+            ret != MBEDTLS_ERR_SSL_WANT_WRITE)
+        {
+            // Handshake error
+            char error_buf[256];
+            mbedtls_strerror(ret, error_buf, sizeof(error_buf));
+
+                ota_common_debug_log(ctx, user_ctx,
+                                     "Error: TLS handshake failed: %d (%s)\n",
+                                     ret, error_buf);
+
+                ota_common_transfer_error(ctx, user_ctx, "TLS handshake failed");
+
+            return false;
+        }
+    }
+
+    ota_common_debug_log(ctx, user_ctx,
+                         "TLS handshake completed successfully\n");
+    return true;
+}
+
+static bool ota_common_tls_handshake_nonblocking(OTA_common_ctx_t* ctx,
+                                                 void* user_ctx)
+{
+    // Non-blocking mode: return immediately
+    ota_common_debug_log(ctx, user_ctx,
+                         "Handshake not complete, continuing...\n");
+
+    int ret = ota_tls_handshake(ctx, user_ctx);
+
+    if (ret == MBEDTLS_ERR_SSL_WANT_READ ||
+        ret == MBEDTLS_ERR_SSL_WANT_WRITE)
+    {
+        // Handshake needs more I/O
+        ota_common_debug_log(ctx, user_ctx,
+                             "Handshake needs more I/O (WANT_%s)\n",
+                             (ret == MBEDTLS_ERR_SSL_WANT_READ) ?
+                             "READ" : "WRITE");
+        return true; // just needs more I/O
+    }
+    else if (ret != 0)
+    {
+        // Handshake error
+        char error_buf[256];
+        mbedtls_strerror(ret, error_buf, sizeof(error_buf));
+
+            ota_common_debug_log(ctx, user_ctx,
+                                 "Handshake error: %d (%s)\n",
+                                 ret, error_buf);
+            ota_common_transfer_error(ctx, user_ctx, "TLS handshake failed");
+        return false;
+    }
+
+    // Handshake completed
+    ota_common_debug_log(ctx, user_ctx,
+                         "Handshake completed successfully!\n");
+    return true;
+}
+
+bool ota_common_tls_handshake(OTA_common_ctx_t* ctx,
+                              void* user_ctx,
+                              bool blocking)
+{
+    if (!ctx)
+        return false;
+
+    // Check if TLS is initialized
+    if (!ota_tls_is_initialized(ctx))
+    {
+        return true; // No TLS, nothing to do
+    }
+
+    // Check if handshake is already complete
+    if (ota_tls_is_handshake_complete(ctx))
+    {
+        return true;
+    }
+
+    if (blocking)
+    {
+        return ota_common_tls_handshake_blocking(ctx, user_ctx);
+    }
+    else
+    {
+        return ota_common_tls_handshake_nonblocking(ctx, user_ctx);
+    }
 }
 
 int ota_common_tls_init(OTA_common_ctx_t* ctx, int endpoint)
@@ -145,8 +307,8 @@ int ota_common_tls_init(OTA_common_ctx_t* ctx, int endpoint)
         return -1;
     }
 
-    ctx->tls.ota_ctx = ctx;
-    ctx->tls.user_ctx = NULL; // Will be set when transfer starts
+    tls_context_set_ota_context(&ctx->tls, ctx);
+    tls_context_set_user_context(&ctx->tls, NULL); // Will be set when transfer starts
 
     ota_common_debug_log(ctx, NULL,
                          "Initializing TLS context...\n");

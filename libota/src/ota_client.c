@@ -1,6 +1,5 @@
 #include "ota_client.h"
 #include "ota_common.h"
-#include "tls_context.h"
 #include "packet.h"
 #include "protocol.h"
 #include <mbedtls/ssl.h>
@@ -57,15 +56,25 @@ int OTA_client_cleanup(OTA_client_ctx* ctx)
     return ota_common_tls_cleanup(&ctx->common);
 }
 
-int OTA_client_handshake(OTA_client_ctx* ctx)
+int OTA_client_handshake(OTA_client_ctx* ctx, void* user_ctx)
 {
-    if (!ctx ||
-        !ctx->common.tls.initialized)
+    if (!ctx)
+        return -1;
+
+    // Non-blocking handshake
+    if (!ota_common_tls_handshake(&ctx->common, user_ctx, false))
     {
         return -1;
     }
 
-    return tls_context_handshake(&ctx->common.tls);
+    // Return 0 if complete, WANT_READ/WANT_WRITE if more I/O needed
+    if (ota_tls_is_handshake_complete(&ctx->common))
+    {
+        return 0;
+    }
+
+    // Handshake in progress, needs more I/O
+    return MBEDTLS_ERR_SSL_WANT_READ;
 }
 
 bool OTA_RAM_FUNCTION(OTA_client_write_firmware)(OTA_client_ctx* ctx,
@@ -150,142 +159,8 @@ static bool OTA_client_handle_data_packet(OTA_client_ctx* ctx,
     return true;
 }
 
-// Perform TLS handshake
-// Returns: true on success (handshake complete or in progress),
-//          false on error
-static bool ota_client_handshake(OTA_client_ctx* ctx, void* user_ctx)
-{
-    if (!ctx ||
-        !ctx->common.tls.initialized)
-    {
-        return true; // No TLS, nothing to do
-    }
-
-    // Set user context for TLS callbacks
-    ctx->common.tls.user_ctx = user_ctx;
-
-    // Check if handshake is already complete
-    if (tls_context_handshake_complete(&ctx->common.tls))
-    {
-        return true;
-    }
-
-    ota_common_debug_log(&ctx->common, user_ctx,
-                         "Handshake not complete, continuing...\n");
-
-    int ret = tls_context_handshake(&ctx->common.tls);
-
-    if (ret == MBEDTLS_ERR_SSL_WANT_READ ||
-        ret == MBEDTLS_ERR_SSL_WANT_WRITE)
-    {
-        // Handshake needs more I/O.
-        // Application should call this again when more data is available
-
-        ota_common_debug_log(&ctx->common, user_ctx,
-                             "Handshake needs more I/O (WANT_%s)\n",
-                             (ret == MBEDTLS_ERR_SSL_WANT_READ) ?
-                             "READ" : "WRITE");
-        return true;
-    }
-    else if (ret != 0)
-    {
-        // Handshake error
-        char error_buf[256];
-        mbedtls_strerror(ret, error_buf, sizeof(error_buf));
-
-        ota_common_debug_log(&ctx->common, user_ctx,
-                             "Handshake error: %d (%s)\n",
-                             ret, error_buf);
-        ctx->common.callbacks.transfer_error_cb(user_ctx,
-                                                "TLS handshake failed");
-        return false;
-    }
-
-    // handshake completed
-    ota_common_debug_log(&ctx->common, user_ctx,
-                         "Handshake completed successfully!\n");
-    return true;
-}
-
-// Read decrypted data from TLS connection
-// Returns: true on success, false on error
-//          output_size will be set to number of bytes read
-static bool ota_client_read_tls(OTA_client_ctx* ctx,
-                                void* user_ctx,
-                                uint8_t* output_buffer,
-                                size_t output_buffer_size,
-                                size_t* output_size)
-{
-    if (!ctx                         ||
-        !ctx->common.tls.initialized ||
-        !output_buffer               ||
-        !output_size)
-    {
-        if (output_size)
-            *output_size = 0;
-
-        return true; // No TLS or invalid params, nothing to read
-    }
-
-    // Check if handshake is complete before reading data
-    if (!tls_context_handshake_complete(&ctx->common.tls))
-    {
-        *output_size = 0;
-        return true;
-    }
-
-    size_t decrypted_size = OTA_recv_data(&ctx->common, user_ctx,
-                                           output_buffer,
-                                           output_buffer_size);
-
-    if (decrypted_size == 0)
-    {
-        // No data available yet
-        ota_common_debug_log(&ctx->common, user_ctx,
-                             "No decrypted data available yet\n");
-        *output_size = 0;
-        return true;
-    }
-
-    ota_common_debug_log(&ctx->common, user_ctx,
-                         "Read %zu bytes of decrypted data\n",
-                         decrypted_size);
-
-    *output_size = decrypted_size;
-    return true;
-}
-
-// Handle TLS handshake and read decrypted data if TLS is active
-// Returns: true if data is ready in output_buffer/output_size, false on error,
-//          true with output_size=0 if more I/O needed (WANT_READ/WANT_WRITE)
-static bool ota_client_handle_tls(OTA_client_ctx* ctx,
-                                  void* user_ctx,
-                                  uint8_t* output_buffer,
-                                  size_t output_buffer_size,
-                                  size_t* output_size)
-{
-    if (!ctx ||
-        !ctx->common.tls.initialized)
-    {
-        *output_size = 0;
-        return true; // No TLS, caller should use raw buffer
-    }
-
-    // Perform TLS handshake
-    if (!ota_client_handshake(ctx, user_ctx))
-    {
-        return false;
-    }
-
-    // Read decrypted data from TLS
-    return ota_client_read_tls(ctx, user_ctx, output_buffer,
-                               output_buffer_size, output_size);
-}
-
 bool OTA_client_handle_data(OTA_client_ctx* ctx,
-                            void* user_ctx,
-                            const uint8_t* buffer,
-                            size_t size)
+                            void* user_ctx)
 {
     if (!ctx)
     {
@@ -305,52 +180,17 @@ bool OTA_client_handle_data(OTA_client_ctx* ctx,
         return false;
     }
 
-    // Handle TLS handshake and read decrypted data if TLS is active
+    // Read from network
     // Use maximum packet size (DATA packet is the largest at 258 bytes)
-    uint8_t decrypted_buffer[OTA_DATA_PACKET_LENGTH];
-    size_t decrypted_size = 0;
-
-    if (ctx->common.tls.initialized)
-    {
-        ota_common_debug_log(&ctx->common, user_ctx,
-                             "TLS is initialized, handling TLS...\n");
-
-        // handle handshake and read decrypted data
-        if (!ota_client_handle_tls(ctx, user_ctx, decrypted_buffer,
-                                   sizeof(decrypted_buffer),
-                                   &decrypted_size))
-        {
-            ota_common_debug_log(&ctx->common, user_ctx,
-                                 "TLS handling failed\n");
-            return false;
-        }
-
-        if (decrypted_size == 0)
-        {
-            return true;
-        }
-
-        // Use decrypted data
-        buffer = decrypted_buffer;
-        size   = decrypted_size;
-    }
-    else
-    {
-        // No TLS, process raw data directly
-        if (!buffer ||
-            size == 0)
-        {
-            ota_common_debug_log(&ctx->common, user_ctx,
-                                 "OTA: Received empty or invalid packet\n");
-            return false;
-        }
-    }
+    uint8_t buffer[OTA_DATA_PACKET_LENGTH];
+    size_t size = OTA_recv_data(&ctx->common, user_ctx,
+                                buffer,
+                                sizeof(buffer));
 
     if (size == 0)
     {
-        ota_common_debug_log(&ctx->common, user_ctx,
-                             "ERROR: Buffer size is 0!\n");
-        return false;
+        // No data available yet (not an error, just need to wait)
+        return true;
     }
 
     if (size < 3)
@@ -358,7 +198,7 @@ bool OTA_client_handle_data(OTA_client_ctx* ctx,
         ota_common_debug_log(&ctx->common, user_ctx,
                              "ERROR: Buffer too small "
                              "(%zu bytes, need at least 3)\n",
-                             size);
+                              size);
         return false;
     }
 
@@ -383,7 +223,8 @@ bool OTA_client_handle_data(OTA_client_ctx* ctx,
 
         case OTA_FIN_TYPE:
             ota_common_debug_log(&ctx->common, user_ctx,
-                                 "OTA: Received FIN packet, file transfer complete!\n");
+                                 "OTA: Received FIN packet, "
+                                 "file transfer complete!\n");
 
             // Finalize SHA-512 hash calculation
             if (ctx->common.sha512.sha512_active)

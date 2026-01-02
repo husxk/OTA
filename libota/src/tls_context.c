@@ -454,6 +454,58 @@ bool tls_context_handshake_complete(tls_context_t* ctx)
     return (mbedtls_ssl_is_handshake_over(ssl) != 0);
 }
 
+void tls_context_set_user_context(tls_context_t* ctx, void* user_ctx)
+{
+    if (!ctx)
+        return;
+
+    ctx->user_ctx = user_ctx;
+}
+
+void tls_context_set_ota_context(tls_context_t* ctx, OTA_common_ctx_t* ota_ctx)
+{
+    if (!ctx)
+        return;
+
+    ctx->ota_ctx = ota_ctx;
+}
+
+bool tls_context_is_initialized(tls_context_t* ctx)
+{
+    if (!ctx)
+        return false;
+
+    return ctx->initialized;
+}
+
+static bool tls_context_ensure_handshake(tls_context_t* ctx)
+{
+    if (!ctx || !ctx->initialized)
+    {
+        return false;
+    }
+
+    // Check if handshake is already complete
+    if (tls_context_handshake_complete(ctx))
+    {
+        return true;
+    }
+
+    // Handshake not complete, try to perform it (non-blocking)
+    int handshake_ret = tls_context_handshake(ctx);
+
+    if (handshake_ret != 0 &&
+        handshake_ret != MBEDTLS_ERR_SSL_WANT_READ &&
+        handshake_ret != MBEDTLS_ERR_SSL_WANT_WRITE)
+    {
+        // Handshake error
+        return false;
+    }
+
+    // Return true if handshake is now complete, false if still in progress
+    return tls_context_handshake_complete(ctx);
+}
+
 int tls_context_send(tls_context_t* ctx,
                      const uint8_t* data,
                      size_t size)
@@ -469,6 +521,13 @@ int tls_context_send(tls_context_t* ctx,
     mbedtls_ssl_context* ssl = ctx->tls_ctx;
     if (!ssl)
         return -1;
+
+    // Ensure handshake is complete before sending
+    if (!tls_context_ensure_handshake(ctx))
+    {
+        // Handshake not complete or error, cannot send data yet
+        return 0;
+    }
 
     size_t total_sent = 0;
 
@@ -504,6 +563,13 @@ int tls_context_receive(tls_context_t* ctx,
     mbedtls_ssl_context* ssl = ctx->tls_ctx;
     if (!ssl)
         return -1;
+
+    // Ensure handshake is complete before reading
+    if (!tls_context_ensure_handshake(ctx))
+    {
+        // Handshake not complete or error, no data available yet
+        return 0;
+    }
 
     ota_common_debug_log(ctx->ota_ctx, NULL,
                          "Attempting to read up to %zu bytes\n",

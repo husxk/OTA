@@ -134,14 +134,43 @@ int ota_common_tls_init(OTA_common_ctx_t* ctx, int endpoint);
 int ota_common_tls_cleanup(OTA_common_ctx_t* ctx);
 
 // Set PKI data (certificate and private key) for TLS server mode
-// Must be called before OTA_server_init on the common context's TLS member
+// Must be called before OTA_server_init
 // Data is stored as shallow copy.
 // Returns: 0 on success, negative value on error
-int OTA_set_pki_data(tls_context_t* ctx,
+int OTA_set_pki_data(OTA_common_ctx_t* ctx,
                      const unsigned char* cert_data,
                      size_t cert_len,
                      const unsigned char* key_data,
                      size_t key_len);
+
+// Check if PKI data is set
+// Returns: true if PKI data is set, false otherwise
+bool ota_tls_is_pki_data_set(OTA_common_ctx_t* ctx);
+
+// Check if TLS is initialized
+// Returns: true if TLS is initialized, false otherwise
+bool ota_tls_is_initialized(OTA_common_ctx_t* ctx);
+
+// Set user context for TLS callbacks
+// user_ctx: User context to set
+void ota_tls_set_user_context(OTA_common_ctx_t* ctx, void* user_ctx);
+
+// Perform TLS handshake with error handling and logging
+// user_ctx: User context for TLS callbacks
+// blocking: If true, loops until handshake completes (blocking mode)
+//           If false, returns immediately on WANT_READ/WANT_WRITE (non-blocking mode)
+// Returns: true on success (handshake complete),
+//          false on error
+//          In non-blocking mode, returns true if handshake needs more I/O
+bool ota_common_tls_handshake(OTA_common_ctx_t* ctx, void* user_ctx, bool blocking);
+
+// Check if TLS handshake is complete
+// Returns: true if handshake is complete, false otherwise
+bool ota_tls_is_handshake_complete(OTA_common_ctx_t* ctx);
+
+// Close TLS connection gracefully
+// Returns: 0 on success, negative value on error
+int ota_tls_close(OTA_common_ctx_t* ctx);
 
 // Internal SHA-512 functions
 // Initialize SHA-512 hash calculation
