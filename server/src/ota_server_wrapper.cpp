@@ -288,7 +288,7 @@ void server_context::init_ota_server(OTA_server_ctx* ctx)
         exit(1);
     }
 
-    OTA_set_pki_data(&ctx->common.tls,
+    OTA_set_pki_data(&ctx->common,
                      cert_data.data(),
                      cert_data.size(),
                      key_data.data(),

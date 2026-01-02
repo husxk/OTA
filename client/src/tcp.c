@@ -42,7 +42,7 @@ packet_handler(device_ctx_t* ctx, struct tcp_pcb* tpcb)
   // Data will be pulled via libota callbacks
   if (ctx->tcp.pbuf_queue_head || ctx->tcp.current_node)
   {
-    OTA_client_handle_data(&ctx->ota_ctx, ctx, NULL, 0);
+    OTA_client_handle_data(&ctx->ota_ctx, ctx);
   }
 }
 
@@ -307,8 +307,8 @@ tcp_work(device_ctx_t* ctx)
     //       that will dispatch this event once?
 
     // Start handshake
-    if (ctx->ota_ctx.common.tls.initialized &&
-        !tls_context_handshake_complete(&ctx->ota_ctx.common.tls))
+    if (ota_tls_is_initialized(&ctx->ota_ctx.common) &&
+        !ota_tls_is_handshake_complete(&ctx->ota_ctx.common))
     {
       if (ctx->tcp.handshake_started)
         return;
@@ -329,7 +329,7 @@ tcp_work(device_ctx_t* ctx)
         return;
       }
 
-      OTA_client_handle_data(&ctx->ota_ctx, ctx, NULL, 0);
+      OTA_client_handle_data(&ctx->ota_ctx, ctx);
     }
   }
 }
