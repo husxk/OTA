@@ -56,27 +56,6 @@ int OTA_client_cleanup(OTA_client_ctx* ctx)
     return ota_common_tls_cleanup(&ctx->common);
 }
 
-int OTA_client_handshake(OTA_client_ctx* ctx, void* user_ctx)
-{
-    if (!ctx)
-        return -1;
-
-    // Non-blocking handshake
-    if (!ota_common_tls_handshake(&ctx->common, user_ctx, false))
-    {
-        return -1;
-    }
-
-    // Return 0 if complete, WANT_READ/WANT_WRITE if more I/O needed
-    if (ota_tls_is_handshake_complete(&ctx->common))
-    {
-        return 0;
-    }
-
-    // Handshake in progress, needs more I/O
-    return MBEDTLS_ERR_SSL_WANT_READ;
-}
-
 bool OTA_RAM_FUNCTION(OTA_client_write_firmware)(OTA_client_ctx* ctx,
                                                  void* user_ctx)
 {

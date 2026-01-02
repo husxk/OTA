@@ -78,13 +78,6 @@ int OTA_client_init(OTA_client_ctx* ctx);
 // Returns: 0 on success, negative value on error
 int OTA_client_cleanup(OTA_client_ctx* ctx);
 
-// Start or continue TLS handshake (non-blocking)
-// user_ctx: User context for TLS callbacks
-// Returns: 0 on success (handshake complete),
-//          MBEDTLS_ERR_SSL_WANT_READ/WANT_WRITE if more I/O needed,
-//          negative value on error
-int OTA_client_handshake(OTA_client_ctx* ctx, void* user_ctx);
-
 bool OTA_RAM_FUNCTION(OTA_client_write_firmware)(OTA_client_ctx* ctx, void* user_ctx);
 
 bool OTA_client_handle_data(OTA_client_ctx* ctx,
