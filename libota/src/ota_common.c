@@ -58,9 +58,9 @@ void OTA_send_data(OTA_common_ctx_t* ctx,
     }
 
     // Use TLS if available, otherwise use plain callback
-    if (ota_tls_is_initialized(ctx))
+    if (ctx->tls && ota_tls_is_initialized(ctx))
     {
-        tls_context_send(&ctx->tls, data, size);
+        tls_context_send(ctx->tls, data, size);
     }
     else if (ctx->callbacks.transfer_send_cb)
     {
@@ -83,7 +83,7 @@ size_t OTA_recv_data(OTA_common_ctx_t* ctx,
     }
 
     // Use TLS if available, otherwise use plain callback
-    if (ota_tls_is_initialized(ctx))
+    if (ctx->tls && ota_tls_is_initialized(ctx))
     {
         // Set user context if provided (needed for TLS callbacks)
         if (user_ctx)
@@ -92,7 +92,7 @@ size_t OTA_recv_data(OTA_common_ctx_t* ctx,
         }
 
         // Handshake checking is done inside tls_context_receive
-        int ret = tls_context_receive(&ctx->tls, buffer, max_size);
+        int ret = tls_context_receive(ctx->tls, buffer, max_size);
 
         if (ret < 0)
             return 0;
@@ -141,52 +141,60 @@ int OTA_set_pki_data(OTA_common_ctx_t* ctx,
     if (!ctx)
         return -1;
 
-    return tls_set_pki_data(&ctx->tls, cert_data, cert_len, key_data, key_len);
+    // Allocate TLS context if not already allocated
+    if (!ctx->tls)
+    {
+        ctx->tls = tls_context_alloc();
+        if (!ctx->tls)
+            return -1;
+    }
+
+    return tls_set_pki_data(ctx->tls, cert_data, cert_len, key_data, key_len);
 }
 
 bool ota_tls_is_pki_data_set(OTA_common_ctx_t* ctx)
 {
-    if (!ctx)
+    if (!ctx || !ctx->tls)
         return false;
 
-    return tls_is_pki_data_set(&ctx->tls);
+    return tls_is_pki_data_set(ctx->tls);
 }
 
 bool ota_tls_is_initialized(OTA_common_ctx_t* ctx)
 {
-    if (!ctx)
+    if (!ctx || !ctx->tls)
         return false;
 
-    return tls_context_is_initialized(&ctx->tls);
+    return tls_context_is_initialized(ctx->tls);
 }
 
 void ota_tls_set_user_context(OTA_common_ctx_t* ctx, void* user_ctx)
 {
-    if (!ctx)
+    if (!ctx || !ctx->tls)
         return;
 
-    tls_context_set_user_context(&ctx->tls, user_ctx);
+    tls_context_set_user_context(ctx->tls, user_ctx);
 }
 
 bool ota_tls_is_handshake_complete(OTA_common_ctx_t* ctx)
 {
-    if (!ctx)
+    if (!ctx || !ctx->tls)
         return false;
 
-    return tls_context_handshake_complete(&ctx->tls);
+    return tls_context_handshake_complete(ctx->tls);
 }
 
 int ota_tls_close(OTA_common_ctx_t* ctx)
 {
-    if (!ctx)
+    if (!ctx || !ctx->tls)
         return -1;
 
-    return tls_context_close(&ctx->tls);
+    return tls_context_close(ctx->tls);
 }
 
 static int ota_tls_handshake(OTA_common_ctx_t* ctx, void* user_ctx)
 {
-    if (!ctx)
+    if (!ctx || !ctx->tls)
         return -1;
 
     // Set user context if provided
@@ -195,7 +203,7 @@ static int ota_tls_handshake(OTA_common_ctx_t* ctx, void* user_ctx)
         ota_tls_set_user_context(ctx, user_ctx);
     }
 
-    return tls_context_handshake(&ctx->tls);
+    return tls_context_handshake(ctx->tls);
 }
 
 static bool ota_common_tls_handshake_blocking(OTA_common_ctx_t* ctx,
@@ -307,13 +315,22 @@ int ota_common_tls_init(OTA_common_ctx_t* ctx, int endpoint)
         return -1;
     }
 
-    tls_context_set_ota_context(&ctx->tls, ctx);
-    tls_context_set_user_context(&ctx->tls, NULL); // Will be set when transfer starts
+    // Allocate TLS context
+    ctx->tls = tls_context_alloc();
+    if (!ctx->tls)
+    {
+        ota_common_debug_log(ctx, NULL,
+                             "Error: Failed to allocate TLS context\n");
+        return -1;
+    }
+
+    tls_context_set_ota_context(ctx->tls, ctx);
+    tls_context_set_user_context(ctx->tls, NULL); // Will be set when transfer starts
 
     ota_common_debug_log(ctx, NULL,
                          "Initializing TLS context...\n");
 
-    int ret = tls_context_init(&ctx->tls, endpoint);
+    int ret = tls_context_init(ctx->tls, endpoint);
     if (ret != 0)
     {
         char error_buf[256];
@@ -338,8 +355,12 @@ int ota_common_tls_cleanup(OTA_common_ctx_t* ctx)
         return -1;
 
     // Close and free TLS context
-    tls_context_close(&ctx->tls);
-    tls_context_free(&ctx->tls);
+    if (ctx->tls)
+    {
+        tls_context_close(ctx->tls);
+        tls_context_free(ctx->tls);
+        ctx->tls = NULL;
+    }
 
     // Cleanup SHA-512 context
     ota_common_sha512_cleanup(ctx);

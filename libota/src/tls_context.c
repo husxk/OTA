@@ -17,6 +17,37 @@
 static tls_entropy_cb_t entropy_callback     = NULL;
 static void*            entropy_callback_ctx = NULL;
 
+// TLS context structure
+struct tls_context
+{
+    // mbedTLS TLS context
+    mbedtls_ssl_context* tls_ctx;
+
+    // mbedTLS TLS config
+    mbedtls_ssl_config* tls_config;
+
+    // Ciphersuites array (must persist for lifetime of config)
+    int ciphersuites[2];
+
+    // OTA context for callbacks
+    OTA_common_ctx_t* ota_ctx;
+    void* user_ctx;
+
+    // PKI data
+    const unsigned char* cert_data;
+    size_t cert_len;
+
+    const unsigned char* key_data;
+    size_t key_len;
+
+    // Parsed PKI structures
+    mbedtls_x509_crt* cert;
+    mbedtls_pk_context* key;
+
+    // Initialization flag
+    bool initialized;
+};
+
 // Platform entropy function called by mbedTLS PSA Crypto
 // Calls user's entropy callback if set via tls_set_entropy_callback()
 int mbedtls_platform_get_entropy(psa_driver_get_entropy_flags_t flags,
@@ -237,6 +268,16 @@ static int tls_setup_pki(tls_context_t* ctx, mbedtls_ssl_config* config)
                          "PKI configured successfully\n");
 
     return 0;
+}
+
+tls_context_t* tls_context_alloc()
+{
+    tls_context_t* ctx = (tls_context_t*) calloc(1, sizeof(tls_context_t));
+
+    if (!ctx)
+        return NULL;
+
+    return ctx;
 }
 
 int tls_context_init(tls_context_t* ctx, int endpoint)
@@ -668,6 +709,8 @@ int tls_context_free(tls_context_t* ctx)
         ctx->initialized = false;
     }
 
+    // Free the context itself
+    free(ctx);
     return 0;
 }
 

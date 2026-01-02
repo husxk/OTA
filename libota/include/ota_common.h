@@ -83,7 +83,7 @@ struct ota_common_ctx
     OTA_common_callbacks_t callbacks;
 
     // TLS context
-    tls_context_t tls;
+    tls_context_t* tls;
 
     // SHA-512 hash context for image verification
     ota_sha512_ctx_t sha512;

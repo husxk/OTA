@@ -19,37 +19,12 @@ typedef struct ota_common_ctx OTA_common_ctx_t;
 // Returns: 0 on success, negative value on error
 typedef int (*tls_entropy_cb_t)(void* ctx, unsigned char* output, size_t len);
 
-// Basic TLS context structure
-typedef struct
-{
-    // mbedTLS TLS context
-    mbedtls_ssl_context* tls_ctx;
+// Opaque TLS context structure
+typedef struct tls_context tls_context_t;
 
-    // mbedTLS TLS config
-    mbedtls_ssl_config* tls_config;
-
-    // Ciphersuites array (must persist for lifetime of config)
-    int ciphersuites[2];
-
-    // OTA context for callbacks
-    OTA_common_ctx_t* ota_ctx;
-    void* user_ctx;
-
-    // PKI data
-    const unsigned char* cert_data;
-    size_t cert_len;
-
-    const unsigned char* key_data;
-    size_t key_len;
-
-    // Parsed PKI structures
-    mbedtls_x509_crt* cert;
-    mbedtls_pk_context* key;
-
-    // Initialization flag
-    bool initialized;
-
-} tls_context_t;
+// Allocate TLS context
+// Returns: pointer to allocated context, or NULL on error
+tls_context_t* tls_context_alloc();
 
 // Initialize TLS context
 // endpoint: MBEDTLS_SSL_IS_SERVER for server mode,
