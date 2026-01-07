@@ -127,10 +127,15 @@ int OTA_set_entropy_cb(tls_entropy_cb_t entropy_cb, void* entropy_ctx);
 // This function is idempotent - safe to call multiple times
 int ota_common_ensure_psa_crypto_init(void);
 
-// Initialize TLS context
+// Set TLS endpoint type
 // endpoint: MBEDTLS_SSL_IS_SERVER for server mode, MBEDTLS_SSL_IS_CLIENT for client mode
 // Returns: 0 on success, negative value on error
-int ota_common_tls_init(OTA_common_ctx_t* ctx, int endpoint);
+int ota_tls_set_endpoint(OTA_common_ctx_t* ctx, int endpoint);
+
+// Initialize TLS context
+// Note: Endpoint type must be set before calling this (via ota_tls_set_endpoint)
+// Returns: 0 on success, negative value on error
+int ota_common_tls_init(OTA_common_ctx_t* ctx);
 
 // Enable TLS transport
 // Returns: 0 on success, negative value on error
@@ -143,6 +148,16 @@ bool ota_tls_is_enabled(OTA_common_ctx_t* ctx);
 // Cleanup TLS context
 // Returns: 0 on success, negative value on error
 int ota_common_tls_cleanup(OTA_common_ctx_t* ctx);
+
+// Restart TLS context (for reconnection scenarios)
+// Cleans up existing TLS context and re-initializes if TLS is enabled
+// Returns: 0 on success, negative value on error
+int OTA_tls_restart(OTA_common_ctx_t* ctx);
+
+// Full cleanup of common context (TLS + SHA-512 keys)
+// Use this for final destruction, not for reconnection scenarios
+// Returns: 0 on success, negative value on error
+int ota_common_cleanup(OTA_common_ctx_t* ctx);
 
 // Set PKI data (certificate and private key) for TLS server mode
 // Must be called before OTA_server_init

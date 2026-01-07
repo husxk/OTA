@@ -44,6 +44,9 @@ struct tls_context
     mbedtls_x509_crt* cert;
     mbedtls_pk_context* key;
 
+    // Endpoint type (MBEDTLS_SSL_IS_SERVER or MBEDTLS_SSL_IS_CLIENT)
+    int endpoint;
+
     // Initialization flag
     bool initialized;
 };
@@ -286,7 +289,7 @@ tls_context_t* tls_context_alloc()
     return ctx;
 }
 
-int tls_context_init(tls_context_t* ctx, int endpoint)
+int tls_context_init(tls_context_t* ctx)
 {
     int ret = 0;
 
@@ -296,9 +299,14 @@ int tls_context_init(tls_context_t* ctx, int endpoint)
     if (!ctx)
         return -1;
 
+    // Get endpoint type (must be set before calling init)
+    int endpoint = ctx->endpoint;
     if (endpoint != MBEDTLS_SSL_IS_SERVER &&
         endpoint != MBEDTLS_SSL_IS_CLIENT)
     {
+        ota_common_debug_log(ctx->ota_ctx, NULL,
+                             "Error: Endpoint type not set. "
+                             "Call tls_context_set_endpoint() first\n");
         return -1;
     }
 
@@ -535,6 +543,29 @@ bool tls_context_is_initialized(tls_context_t* ctx)
         return false;
 
     return ctx->initialized;
+}
+
+int tls_context_set_endpoint(tls_context_t* ctx, int endpoint)
+{
+    if (!ctx)
+        return -1;
+
+    if (endpoint != MBEDTLS_SSL_IS_SERVER &&
+        endpoint != MBEDTLS_SSL_IS_CLIENT)
+    {
+        return -1;
+    }
+
+    ctx->endpoint = endpoint;
+    return 0;
+}
+
+int tls_context_get_endpoint(tls_context_t* ctx)
+{
+    if (!ctx)
+        return -1;
+
+    return ctx->endpoint;
 }
 
 static bool tls_context_ensure_handshake(tls_context_t* ctx)

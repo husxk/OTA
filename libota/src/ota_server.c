@@ -88,8 +88,14 @@ int OTA_server_init(OTA_server_ctx* ctx)
             return -1;
         }
 
+        // Set endpoint type for server
+        if (ota_tls_set_endpoint(&ctx->common, MBEDTLS_SSL_IS_SERVER) != 0)
+        {
+            return -1;
+        }
+
         // Use common TLS initialization function
-        return ota_common_tls_init(&ctx->common, MBEDTLS_SSL_IS_SERVER);
+        return ota_common_tls_init(&ctx->common);
     }
 
     // TLS not enabled, skip initialization
@@ -210,6 +216,5 @@ int OTA_server_cleanup(OTA_server_ctx* ctx)
     if (!ctx)
         return -1;
 
-    // Use common TLS cleanup function
-    return ota_common_tls_cleanup(&ctx->common);
+    return ota_common_cleanup(&ctx->common);
 }

@@ -48,7 +48,13 @@ int OTA_client_init(OTA_client_ctx* ctx)
     // Only initialize TLS if it's enabled
     if (ctx->common.tls_enabled)
     {
-        return ota_common_tls_init(&ctx->common, MBEDTLS_SSL_IS_CLIENT);
+        // Set endpoint type for client
+        if (ota_tls_set_endpoint(&ctx->common, MBEDTLS_SSL_IS_CLIENT) != 0)
+        {
+            return -1;
+        }
+
+        return ota_common_tls_init(&ctx->common);
     }
 
     // TLS not enabled, skip initialization
@@ -60,7 +66,7 @@ int OTA_client_cleanup(OTA_client_ctx* ctx)
     if (!ctx)
         return -1;
 
-    return ota_common_tls_cleanup(&ctx->common);
+    return ota_common_cleanup(&ctx->common);
 }
 
 bool OTA_RAM_FUNCTION(OTA_client_write_firmware)(OTA_client_ctx* ctx,

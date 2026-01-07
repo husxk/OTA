@@ -27,10 +27,9 @@ typedef struct tls_context tls_context_t;
 tls_context_t* tls_context_alloc();
 
 // Initialize TLS context
-// endpoint: MBEDTLS_SSL_IS_SERVER for server mode,
-//           MBEDTLS_SSL_IS_CLIENT for client mode
+// Note: Call tls_context_set_endpoint() before calling this function
 // Returns: 0 on success, negative value on error
-int tls_context_init(tls_context_t* ctx, int endpoint);
+int tls_context_init(tls_context_t* ctx);
 
 // Perform TLS handshake
 // Returns: 0 on success, MBEDTLS_ERR_SSL_WANT_READ/WANT_WRITE, negative on error
@@ -49,6 +48,15 @@ void tls_context_set_ota_context(tls_context_t* ctx, OTA_common_ctx_t* ota_ctx);
 // Check if TLS context is initialized
 // Returns: true if initialized, false otherwise
 bool tls_context_is_initialized(tls_context_t* ctx);
+
+// Set endpoint type for TLS context
+// endpoint: MBEDTLS_SSL_IS_SERVER or MBEDTLS_SSL_IS_CLIENT
+// Returns: 0 on success, negative value on error
+int tls_context_set_endpoint(tls_context_t* ctx, int endpoint);
+
+// Get endpoint type from TLS context
+// Returns: MBEDTLS_SSL_IS_SERVER or MBEDTLS_SSL_IS_CLIENT, or -1 if not set
+int tls_context_get_endpoint(tls_context_t* ctx);
 
 // Send data through TLS connection
 // Returns: number of bytes sent on success, negative value on error

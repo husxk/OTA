@@ -288,7 +288,28 @@ bool ota_common_tls_handshake(OTA_common_ctx_t* ctx,
     }
 }
 
-int ota_common_tls_init(OTA_common_ctx_t* ctx, int endpoint)
+int ota_tls_set_endpoint(OTA_common_ctx_t* ctx, int endpoint)
+{
+    if (!ctx)
+        return -1;
+
+    // Allocate TLS context if not already allocated
+    if (!ctx->tls)
+    {
+        ctx->tls = tls_context_alloc();
+        if (!ctx->tls)
+        {
+            ota_common_debug_log(ctx, NULL,
+                                 "Error: Failed to allocate TLS context\n");
+            return -1;
+        }
+        tls_context_set_ota_context(ctx->tls, ctx);
+    }
+
+    return tls_context_set_endpoint(ctx->tls, endpoint);
+}
+
+int ota_common_tls_init(OTA_common_ctx_t* ctx)
 {
     if (!ctx)
         return -1;
@@ -326,7 +347,7 @@ int ota_common_tls_init(OTA_common_ctx_t* ctx, int endpoint)
     ota_common_debug_log(ctx, NULL,
                          "Initializing TLS context...\n");
 
-    int ret = tls_context_init(ctx->tls, endpoint);
+    int ret = tls_context_init(ctx->tls);
     if (ret != 0)
     {
         char error_buf[256];
@@ -382,7 +403,72 @@ int ota_common_tls_cleanup(OTA_common_ctx_t* ctx)
         ctx->tls = NULL;
     }
 
-    // Cleanup SHA-512 context
+    // Cleanup SHA-512 hash operation state, but preserve keys
+    if (ctx->sha512.sha512_active)
+    {
+        psa_hash_abort(&ctx->sha512.sha512_operation);
+    }
+
+    memset(&ctx->sha512.sha512_operation, 0, sizeof(ctx->sha512.sha512_operation));
+    memset(ctx->sha512.sha512_hash, 0, sizeof(ctx->sha512.sha512_hash));
+    memset(ctx->sha512.sha512_signature, 0, sizeof(ctx->sha512.sha512_signature));
+
+    ctx->sha512.sha512_calculated = false;
+    ctx->sha512.sha512_active = false;
+    ctx->sha512.sha512_signature_length = 0;
+    ctx->sha512.sha512_signed = false;
+
+    // Note: We do NOT free sha512_private_key or sha512_public_key here
+    // as they should persist across reconnections
+
+    return 0;
+}
+
+int OTA_tls_restart(OTA_common_ctx_t* ctx)
+{
+    if (!ctx)
+        return -1;
+
+    // Get endpoint type before cleanup (returns -1 if not set)
+    int endpoint = -1;
+    if (ctx->tls)
+    {
+        endpoint = tls_context_get_endpoint(ctx->tls);
+    }
+
+    // Close and free existing TLS context
+    ota_common_tls_cleanup(ctx);
+
+    // Re-initialize TLS if it was enabled and we have a valid endpoint
+    if (ctx->tls_enabled && endpoint != -1)
+    {
+        // Allocate new TLS context and set endpoint
+        ctx->tls = tls_context_alloc();
+        if (!ctx->tls)
+        {
+            ota_common_debug_log(ctx, NULL,
+                                 "Error: Failed to allocate TLS context\n");
+            return -1;
+        }
+
+        tls_context_set_ota_context(ctx->tls, ctx);
+        tls_context_set_endpoint(ctx->tls, endpoint);
+
+        return ota_common_tls_init(ctx);
+    }
+
+    return 0;
+}
+
+int ota_common_cleanup(OTA_common_ctx_t* ctx)
+{
+    if (!ctx)
+        return -1;
+
+    // Cleanup TLS context (preserves SHA-512 keys)
+    ota_common_tls_cleanup(ctx);
+
+    // Full SHA-512 cleanup including keys
     ota_common_sha512_cleanup(ctx);
 
     return 0;
