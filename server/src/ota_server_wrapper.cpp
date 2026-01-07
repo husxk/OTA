@@ -245,7 +245,14 @@ bool server_context::init()
     // Initialize OTA server context structure
     init_ota_server(&ota_ctx);
 
-    // Initialize TLS and OTA server (must be called after init_ota_server)
+    // Enable TLS transport (must be called before OTA_server_init)
+    if (OTA_enable_tls(&ota_ctx.common) != 0)
+    {
+        printf("Error: Failed to enable TLS transport\n");
+        return false;
+    }
+
+    // Initialize TLS and OTA server (must be called after init_ota_server and TLS is enabled)
     if (OTA_server_init(&ota_ctx) != 0)
     {
         printf("Error: Failed to initialize OTA server\n");
