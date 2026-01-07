@@ -51,7 +51,7 @@ static bool ota_wait_for_response_server(OTA_server_ctx* ctx,
         if (packet_type == OTA_NACK_TYPE)
         {
             ota_common_transfer_error(&ctx->common, user_ctx,
-                                      "Received NACK");
+                                      "Transfer rejected by client (NACK)");
         }
         else
         {
@@ -76,17 +76,24 @@ int OTA_server_init(OTA_server_ctx* ctx)
         return -1;
     }
 
-    // Check if PKI data is set
-    if (!ota_tls_is_pki_data_set(&ctx->common))
+    // Only initialize TLS if it's enabled
+    if (ctx->common.tls_enabled)
     {
-        ota_common_debug_log(&ctx->common, NULL,
-                             "Error: PKI data not set. "
-                             "Call OTA_set_pki_data() first\n");
-        return -1;
+        // Check if PKI data is set (required for TLS server)
+        if (!ota_tls_is_pki_data_set(&ctx->common))
+        {
+            ota_common_debug_log(&ctx->common, NULL,
+                                 "Error: PKI data not set. "
+                                 "Call OTA_set_pki_data() first\n");
+            return -1;
+        }
+
+        // Use common TLS initialization function
+        return ota_common_tls_init(&ctx->common, MBEDTLS_SSL_IS_SERVER);
     }
 
-    // Use common TLS initialization function
-    return ota_common_tls_init(&ctx->common, MBEDTLS_SSL_IS_SERVER);
+    // TLS not enabled, skip initialization
+    return 0;
 }
 
 bool OTA_server_run_transfer(OTA_server_ctx* ctx, void* user_ctx)
@@ -110,10 +117,16 @@ bool OTA_server_run_transfer(OTA_server_ctx* ctx, void* user_ctx)
         return false;
     }
 
+    // TODO: we shouldnt call it directly, it should be handled
+    // by reading/writting functions from ota_common
+    //
     // Perform TLS handshake (blocking mode)
-    if (!ota_common_tls_handshake(&ctx->common, user_ctx, true))
+    if (ctx->common.tls_enabled)
     {
-        return false;
+        if (!ota_common_tls_handshake(&ctx->common, user_ctx, true))
+        {
+            return false;
+        }
     }
 
     ota_common_debug_log(&ctx->common, user_ctx,

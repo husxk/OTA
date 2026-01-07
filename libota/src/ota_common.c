@@ -57,8 +57,8 @@ void OTA_send_data(OTA_common_ctx_t* ctx,
         return;
     }
 
-    // Use TLS if available, otherwise use plain callback
-    if (ctx->tls && ota_tls_is_initialized(ctx))
+    // Use TLS if enabled, otherwise use plain callback
+    if (ctx->tls_enabled && ctx->tls)
     {
         tls_context_send(ctx->tls, data, size);
     }
@@ -82,8 +82,8 @@ size_t OTA_recv_data(OTA_common_ctx_t* ctx,
         return 0;
     }
 
-    // Use TLS if available, otherwise use plain callback
-    if (ctx->tls && ota_tls_is_initialized(ctx))
+    // Use TLS if enabled, otherwise use plain callback
+    if (ctx->tls_enabled && ctx->tls)
     {
         // Set user context if provided (needed for TLS callbacks)
         if (user_ctx)
@@ -158,14 +158,6 @@ bool ota_tls_is_pki_data_set(OTA_common_ctx_t* ctx)
         return false;
 
     return tls_is_pki_data_set(ctx->tls);
-}
-
-bool ota_tls_is_initialized(OTA_common_ctx_t* ctx)
-{
-    if (!ctx || !ctx->tls)
-        return false;
-
-    return tls_context_is_initialized(ctx->tls);
 }
 
 void ota_tls_set_user_context(OTA_common_ctx_t* ctx, void* user_ctx)
@@ -277,14 +269,8 @@ bool ota_common_tls_handshake(OTA_common_ctx_t* ctx,
                               void* user_ctx,
                               bool blocking)
 {
-    if (!ctx)
+    if (!ctx || !ctx->tls)
         return false;
-
-    // Check if TLS is initialized
-    if (!ota_tls_is_initialized(ctx))
-    {
-        return true; // No TLS, nothing to do
-    }
 
     // Check if handshake is already complete
     if (ota_tls_is_handshake_complete(ctx))
@@ -307,6 +293,13 @@ int ota_common_tls_init(OTA_common_ctx_t* ctx, int endpoint)
     if (!ctx)
         return -1;
 
+    // Only initialize TLS if it's enabled
+    if (!ctx->tls_enabled)
+    {
+        // TLS not enabled, skip initialization
+        return 0;
+    }
+
     if (!tls_is_entropy_callback_set())
     {
         ota_common_debug_log(ctx, NULL,
@@ -315,13 +308,16 @@ int ota_common_tls_init(OTA_common_ctx_t* ctx, int endpoint)
         return -1;
     }
 
-    // Allocate TLS context
-    ctx->tls = tls_context_alloc();
+    // Allocate TLS context if not already allocated
     if (!ctx->tls)
     {
-        ota_common_debug_log(ctx, NULL,
-                             "Error: Failed to allocate TLS context\n");
-        return -1;
+        ctx->tls = tls_context_alloc();
+        if (!ctx->tls)
+        {
+            ota_common_debug_log(ctx, NULL,
+                                 "Error: Failed to allocate TLS context\n");
+            return -1;
+        }
     }
 
     tls_context_set_ota_context(ctx->tls, ctx);
@@ -347,6 +343,30 @@ int ota_common_tls_init(OTA_common_ctx_t* ctx, int endpoint)
                          "TLS context initialized successfully\n");
 
     return 0;
+}
+
+int OTA_enable_tls(OTA_common_ctx_t* ctx)
+{
+    if (!ctx)
+    {
+        return -1;
+    }
+
+    ctx->tls_enabled = true;
+    ota_common_debug_log(ctx, NULL,
+                         "TLS transport enabled\n");
+
+    return 0;
+}
+
+bool ota_tls_is_enabled(OTA_common_ctx_t* ctx)
+{
+    if (!ctx)
+    {
+        return false;
+    }
+
+    return ctx->tls_enabled;
 }
 
 int ota_common_tls_cleanup(OTA_common_ctx_t* ctx)

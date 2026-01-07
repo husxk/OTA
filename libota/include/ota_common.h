@@ -85,6 +85,9 @@ struct ota_common_ctx
     // TLS context
     tls_context_t* tls;
 
+    // TLS enabled flag
+    bool tls_enabled;
+
     // SHA-512 hash context for image verification
     ota_sha512_ctx_t sha512;
 };
@@ -129,6 +132,14 @@ int ota_common_ensure_psa_crypto_init(void);
 // Returns: 0 on success, negative value on error
 int ota_common_tls_init(OTA_common_ctx_t* ctx, int endpoint);
 
+// Enable TLS transport
+// Returns: 0 on success, negative value on error
+int OTA_enable_tls(OTA_common_ctx_t* ctx);
+
+// Check if TLS is enabled
+// Returns: true if TLS is enabled, false otherwise
+bool ota_tls_is_enabled(OTA_common_ctx_t* ctx);
+
 // Cleanup TLS context
 // Returns: 0 on success, negative value on error
 int ota_common_tls_cleanup(OTA_common_ctx_t* ctx);
@@ -146,10 +157,6 @@ int OTA_set_pki_data(OTA_common_ctx_t* ctx,
 // Check if PKI data is set
 // Returns: true if PKI data is set, false otherwise
 bool ota_tls_is_pki_data_set(OTA_common_ctx_t* ctx);
-
-// Check if TLS is initialized
-// Returns: true if TLS is initialized, false otherwise
-bool ota_tls_is_initialized(OTA_common_ctx_t* ctx);
 
 // Set user context for TLS callbacks
 // user_ctx: User context to set

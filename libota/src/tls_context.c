@@ -161,8 +161,14 @@ static int tls_setup_pki(tls_context_t* ctx, mbedtls_ssl_config* config)
         ctx->cert = NULL;
         ctx->key  = NULL;
 
+        ota_common_debug_log(ctx->ota_ctx, NULL,
+                             "Warning: PKI data not provided\n");
         return 0; // PKI is optional
     }
+
+    ota_common_debug_log(ctx->ota_ctx, NULL,
+                         "Setting up PKI: cert_len=%zu, key_len=%zu\n",
+                         ctx->cert_len, ctx->key_len);
 
     ota_common_debug_log(ctx->ota_ctx, NULL,
                          "Setting up PKI\n");
@@ -355,6 +361,18 @@ int tls_context_init(tls_context_t* ctx, int endpoint)
     mbedtls_ssl_conf_authmode(config, MBEDTLS_SSL_VERIFY_NONE);
 
     // Setup PKI data if provided
+    // For server, PKI is required
+    if (endpoint == MBEDTLS_SSL_IS_SERVER)
+    {
+        if (!tls_is_pki_data_set(ctx))
+        {
+            ota_common_debug_log(ctx->ota_ctx, NULL,
+                                 "Error: Server requires certificate and key\n");
+            ret = -1;
+            goto cleanup;
+        }
+    }
+
     ret = tls_setup_pki(ctx, config);
     if (ret != 0)
     {

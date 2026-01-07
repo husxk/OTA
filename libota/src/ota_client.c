@@ -45,7 +45,14 @@ int OTA_client_init(OTA_client_ctx* ctx)
                              "continuing without hash calculation\n");
     }
 
-    return ota_common_tls_init(&ctx->common, MBEDTLS_SSL_IS_CLIENT);
+    // Only initialize TLS if it's enabled
+    if (ctx->common.tls_enabled)
+    {
+        return ota_common_tls_init(&ctx->common, MBEDTLS_SSL_IS_CLIENT);
+    }
+
+    // TLS not enabled, skip initialization
+    return 0;
 }
 
 int OTA_client_cleanup(OTA_client_ctx* ctx)
