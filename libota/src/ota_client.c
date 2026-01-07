@@ -249,10 +249,14 @@ bool OTA_client_handle_data(OTA_client_ctx* ctx,
 
                 ota_common_transfer_error(&ctx->common, user_ctx,
                                           "Signature verification failed");
+
+                // Send NACK to inform server of verification failure
+                ota_send_nack_packet(&ctx->common, user_ctx);
+
                 return false;
             }
 
-            // Send ACK for FIN packet
+            // Send ACK for FIN packet (signature verified successfully)
             ota_send_ack_packet(&ctx->common, user_ctx);
 
             // Notify platform that transfer is complete
