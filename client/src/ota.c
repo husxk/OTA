@@ -268,8 +268,15 @@ int init_ota(OTA_client_ctx* ctx)
         return -1;
     }
 
+    // Enable TLS transport (must be called before OTA_client_init)
+    if (OTA_enable_tls(&ctx->common) != 0)
+    {
+        DEBUG("OTA: Failed to enable TLS transport\n");
+        return -1;
+    }
+
     // Initialize TLS context (client mode)
-    // Must be called after all callbacks are set
+    // Must be called after all callbacks are set and TLS is enabled
     if (OTA_client_init(ctx) != 0)
     {
         return -1;

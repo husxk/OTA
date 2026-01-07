@@ -114,8 +114,8 @@ tcp_client_close(device_ctx_t* ctx)
   // Free all queued pbufs
   tcp_free_pbuf_queue(ctx);
 
-  // Cleanup TLS resources on disconnect
-  OTA_client_cleanup(&ctx->ota_ctx);
+  // Restart TLS context for reconnection (preserves SHA-512 keys)
+  OTA_tls_restart(&ctx->ota_ctx.common);
 
   // now + 5 seconds
   ctx->tcp.last_reconnect_attempt = make_timeout_time_ms(5000);
@@ -307,7 +307,7 @@ tcp_work(device_ctx_t* ctx)
     //       that will dispatch this event once?
 
     // Start handshake
-    if (ota_tls_is_initialized(&ctx->ota_ctx.common) &&
+    if (ota_tls_is_enabled(&ctx->ota_ctx.common) &&
         !ota_tls_is_handshake_complete(&ctx->ota_ctx.common))
     {
       if (ctx->tcp.handshake_started)
