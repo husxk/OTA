@@ -1,6 +1,7 @@
 #include "ota_server_wrapper.h"
 #include "libota/ota_common.h"
 #include "libota/ota_server.h"
+#include "libota/ota_server_builder.h"
 #include "libota/protocol.h"
 #include <cstdio>
 #include <cstdarg>
@@ -121,6 +122,7 @@ int server_context::entropy_callback(void* ctx, unsigned char* output, size_t le
 server_context::server_context()
     : server(std::make_unique<tcp_server>())
     , reader(std::make_unique<file_reader>())
+    , ota_ctx(nullptr)
     , packet_number(0)
 {
     // Open /dev/urandom for entropy generation
@@ -242,18 +244,9 @@ bool server_context::load_signing_key(const std::string& signing_key_path)
 
 bool server_context::init()
 {
-    // Initialize OTA server context structure
-    init_ota_server(&ota_ctx);
-
-    // Enable TLS transport (must be called before OTA_server_init)
-    if (OTA_enable_tls(&ota_ctx.common) != 0)
-    {
-        printf("Error: Failed to enable TLS transport\n");
-        return false;
-    }
-
-    // Initialize TLS and OTA server (must be called after init_ota_server and TLS is enabled)
-    if (OTA_server_init(&ota_ctx) != 0)
+    // Initialize OTA server context using builder
+    ota_ctx = init_ota_server();
+    if (!ota_ctx)
     {
         printf("Error: Failed to initialize OTA server\n");
         return false;
@@ -262,66 +255,101 @@ bool server_context::init()
     return true;
 }
 
-void server_context::init_ota_server(OTA_server_ctx* ctx)
+OTA_server_ctx* server_context::init_ota_server(void)
 {
-    if (!ctx)
-    {
-        return;
-    }
-
-    std::memset(ctx, 0, sizeof(*ctx));
-
-    // Set common transfer callbacks
-    ctx->common.callbacks.transfer_send_cb    = transfer_send;
-    ctx->common.callbacks.transfer_receive_cb = transfer_receive;
-    ctx->common.callbacks.transfer_error_cb   = transfer_error;
-    ctx->common.callbacks.transfer_done_cb    = transfer_done;
-    ctx->common.callbacks.debug_log_cb        = debug_log;
-
-    // Set entropy callback for TLS
-    // Pass 'this' as context so entropy_callback can access urandom_file
-    OTA_set_entropy_cb(entropy_callback, this);
-
-    // Validate and set PKI data for TLS
+    // Validate required data
     if (cert_data.empty())
     {
-        printf("Error: Certificate data is empty. Call load_pki() before run()\n");
-        exit(1);
+        printf("Error: Certificate data is empty. Call load_pki() before init()\n");
+        return nullptr;
     }
 
     if (key_data.empty())
     {
-        printf("Error: Private key data is empty. Call load_pki() before run()\n");
-        exit(1);
+        printf("Error: Private key data is empty. Call load_pki() before init()\n");
+        return nullptr;
     }
 
-    OTA_set_pki_data(&ctx->common,
-                     cert_data.data(),
-                     cert_data.size(),
-                     key_data.data(),
-                     key_data.size());
-
-   // Set private key for SHA-512 signing (separate from TLS key)
     if (signing_key_data.empty())
     {
         printf("Error: Signing key data is empty. "
                "Call load_signing_key() before init()\n");
-        exit(1);
+        return nullptr;
     }
 
-    if (OTA_set_sha512_private_key(&ctx->common,
-                                    signing_key_data.data(),
-                                    signing_key_data.size()) != 0)
+    // Create builder
+    OTA_server_builder_t* builder = OTA_server_builder_create();
+    if (!builder)
     {
-        printf("Error: Failed to set SHA-512 private key for signing\n");
-        exit(1);
+        printf("Error: Failed to create server builder\n");
+        return nullptr;
     }
 
-    printf("SHA-512 signing private key loaded successfully\n");
+    // Set common transfer callbacks
+    OTA_server_builder_set_transfer_send_cb(builder, transfer_send);
+    OTA_server_builder_set_transfer_receive_cb(builder, transfer_receive);
+    OTA_server_builder_set_transfer_error_cb(builder, transfer_error);
+    OTA_server_builder_set_transfer_done_cb(builder, transfer_done);
+    OTA_server_builder_set_debug_log_cb(builder, debug_log);
 
     // Set server-specific callbacks
-    ctx->server_get_payload_cb       = server_get_payload;
-    ctx->server_transfer_progress_cb = server_transfer_progress;
+    OTA_server_builder_set_server_get_payload_cb(builder, server_get_payload);
+    OTA_server_builder_set_server_transfer_progress_cb(builder, server_transfer_progress);
+
+    // Set entropy callback for TLS
+    // Pass 'this' as context so entropy_callback can access urandom_file
+    if (OTA_server_builder_set_entropy_cb(builder, entropy_callback, this) != 0)
+    {
+        printf("Error: Failed to set entropy callback\n");
+        OTA_server_builder_destroy(builder);
+        return nullptr;
+    }
+
+    // Set PKI data for TLS
+    if (OTA_server_builder_set_pki_data(builder,
+                                        cert_data.data(),
+                                        cert_data.size(),
+                                        key_data.data(),
+                                        key_data.size()) != 0)
+    {
+        printf("Error: Failed to set PKI data\n");
+        OTA_server_builder_destroy(builder);
+        return nullptr;
+    }
+
+    // Set private key for SHA-512 signing (separate from TLS key)
+    if (OTA_server_builder_set_sha512_private_key(builder,
+                                                  signing_key_data.data(),
+                                                  signing_key_data.size()) != 0)
+    {
+        printf("Error: Failed to set SHA-512 private key for signing\n");
+        OTA_server_builder_destroy(builder);
+        return nullptr;
+    }
+
+    // Enable TLS
+    if (OTA_server_builder_enable_tls(builder) != 0)
+    {
+        printf("Error: Failed to enable TLS transport\n");
+        OTA_server_builder_destroy(builder);
+        return nullptr;
+    }
+
+    // Build the context (fully initializes TLS, SHA-512, etc.)
+    int error_code;
+    OTA_server_ctx* ctx = OTA_server_builder_build(builder, &error_code);
+    if (!ctx)
+    {
+        printf("Error: Failed to build server context (error: %d)\n", error_code);
+        OTA_server_builder_destroy(builder);
+        return nullptr;
+    }
+
+    // Destroy builder (no longer needed after build)
+    OTA_server_builder_destroy(builder);
+
+    printf("SHA-512 signing private key loaded successfully\n");
+    return ctx;
 }
 
 bool server_context::run(uint16_t port)
@@ -349,10 +377,10 @@ bool server_context::run(uint16_t port)
     printf("OTA server ready. Sending file data...\n");
 
     // Run OTA transfer using libota
-    bool transfer_success = OTA_server_run_transfer(&ota_ctx, this);
+    bool transfer_success = OTA_server_run_transfer(ota_ctx, this);
 
     // Cleanup OTA server resources
-    OTA_server_cleanup(&ota_ctx);
+    OTA_server_cleanup(ota_ctx);
 
     if (!transfer_success)
     {
@@ -368,4 +396,13 @@ bool server_context::run(uint16_t port)
     printf("OTA server stopped\n");
 
     return transfer_success;
+}
+
+server_context::~server_context()
+{
+    if (ota_ctx)
+    {
+        OTA_server_destroy(ota_ctx);
+        ota_ctx = nullptr;
+    }
 }

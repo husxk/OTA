@@ -1,6 +1,7 @@
 #pragma once
 
 #include "libota/ota_server.h"
+#include "libota/ota_server_builder.h"
 #include "libota/ota_common.h"
 #include "tcp_server.h"
 #include "file_reader.h"
@@ -15,7 +16,7 @@ class server_context
 {
 public:
     server_context();
-    ~server_context() = default;
+    ~server_context();
 
     bool load_file(const std::string& file_path);
     bool load_pki(const std::string& cert_path, const std::string& key_path);
@@ -24,7 +25,7 @@ public:
     bool run(uint16_t port);
 
 private:
-    void init_ota_server(OTA_server_ctx* ctx);
+    OTA_server_ctx* init_ota_server(void);
 
     static void transfer_send(void* user_ctx,
                               const uint8_t* data,
@@ -66,7 +67,7 @@ private:
     std::vector<unsigned char> signing_key_data;
 
     // OTA server context (initialized in init())
-    OTA_server_ctx ota_ctx;
+    OTA_server_ctx* ota_ctx;
 
     uint32_t packet_number;
 };
