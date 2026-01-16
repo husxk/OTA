@@ -1,10 +1,12 @@
 #include "ota_client.h"
+#include "ota_client_internal.h"
 #include "ota_common.h"
 #include "packet.h"
 #include "protocol.h"
 #include <mbedtls/ssl.h>
 #include <mbedtls/error.h>
 #include <stdarg.h>
+#include <stdlib.h>
 
 void OTA_RAM_FUNCTION(OTA_memcpy_ram)(void* dest, const void* src, size_t n)
 {
@@ -69,14 +71,67 @@ int OTA_client_cleanup(OTA_client_ctx* ctx)
     return ota_common_cleanup(&ctx->common);
 }
 
+void OTA_client_destroy(OTA_client_ctx* ctx)
+{
+    if (!ctx)
+    {
+        return;
+    }
+
+    // Cleanup resources (TLS, SHA-512, etc.)
+    ota_common_cleanup(&ctx->common);
+
+    // Free the context itself
+    free(ctx);
+}
+
+int OTA_client_reset(OTA_client_ctx* ctx)
+{
+    if (!ctx)
+    {
+        return -1;
+    }
+
+    // Cleanup runtime state (TLS connections, SHA-512 operations)
+    // This preserves callbacks and memory configuration
+    return ota_common_cleanup(&ctx->common);
+}
+
+int OTA_client_tls_restart(OTA_client_ctx* ctx)
+{
+    if (!ctx)
+    {
+        return -1;
+    }
+
+    return OTA_tls_restart(&ctx->common);
+}
+
+bool OTA_client_tls_is_enabled(OTA_client_ctx* ctx)
+{
+    if (!ctx)
+    {
+        return false;
+    }
+
+    return ota_tls_is_enabled(&ctx->common);
+}
+
+bool OTA_client_tls_is_handshake_complete(OTA_client_ctx* ctx)
+{
+    if (!ctx)
+    {
+        return false;
+    }
+
+    return ota_tls_is_handshake_complete(&ctx->common);
+}
+
+
 bool OTA_RAM_FUNCTION(OTA_client_write_firmware)(OTA_client_ctx* ctx,
                                                  void* user_ctx)
 {
-    if (!ctx                      ||
-        !ctx->firmware_reboot_cb  ||
-        !ctx->firmware_read_cb    ||
-        !ctx->firmware_prepare_cb ||
-        !ctx->firmware_write_cb)
+    if (!ctx)
     {
         return false;
     }
@@ -114,11 +169,7 @@ static bool OTA_client_handle_data_packet(OTA_client_ctx* ctx,
                                           const uint8_t* buffer,
                                           size_t size)
 {
-    if (!ctx                                     ||
-        !ctx->transfer_store_cb                  ||
-        !ctx->transfer_reset_cb                  ||
-        !ctx->common.callbacks.transfer_send_cb  ||
-        !ctx->common.callbacks.transfer_error_cb)
+    if (!ctx)
     {
         return false;
     }
@@ -156,19 +207,6 @@ bool OTA_client_handle_data(OTA_client_ctx* ctx,
 {
     if (!ctx)
     {
-        return false;
-    }
-
-    // Validate required callbacks
-    if (!ctx->transfer_store_cb                    ||
-        !ctx->transfer_reset_cb                    ||
-        !ctx->common.callbacks.transfer_send_cb    ||
-        !ctx->common.callbacks.transfer_receive_cb ||
-        !ctx->common.callbacks.transfer_error_cb   ||
-        !ctx->common.callbacks.transfer_done_cb)
-    {
-        ota_common_debug_log(&ctx->common, user_ctx,
-                            "OTA: Missing required callbacks\n");
         return false;
     }
 
@@ -237,10 +275,7 @@ bool OTA_client_handle_data(OTA_client_ctx* ctx,
                 ota_common_debug_log(&ctx->common, user_ctx,
                                      "OTA: Invalid FIN packet signature format\n");
                 // Reset offsets on invalid signature format
-                if (ctx->transfer_reset_cb)
-                {
-                    ctx->transfer_reset_cb(user_ctx);
-                }
+                ctx->transfer_reset_cb(user_ctx);
 
                 ota_common_transfer_error(&ctx->common, user_ctx,
                                           "Invalid FIN packet signature");
@@ -255,10 +290,7 @@ bool OTA_client_handle_data(OTA_client_ctx* ctx,
             if (verify_ret != 0)
             {
                 // Reset offsets on verification failure
-                if (ctx->transfer_reset_cb)
-                {
-                    ctx->transfer_reset_cb(user_ctx);
-                }
+                ctx->transfer_reset_cb(user_ctx);
 
                 ota_common_transfer_error(&ctx->common, user_ctx,
                                           "Signature verification failed");

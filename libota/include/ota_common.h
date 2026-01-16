@@ -76,6 +76,14 @@ typedef struct
 
 } OTA_common_callbacks_t;
 
+// Validate required common callbacks
+// Returns: true if all required callbacks are set, false otherwise
+bool ota_common_callbacks_validate(const OTA_common_callbacks_t* callbacks);
+
+// Copy common callbacks from source to destination
+void ota_common_callbacks_copy(OTA_common_callbacks_t* dest,
+                               const OTA_common_callbacks_t* src);
+
 // Common OTA context structure (full definition)
 struct ota_common_ctx
 {

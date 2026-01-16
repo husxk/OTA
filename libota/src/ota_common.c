@@ -15,6 +15,41 @@
 // Static flag to track PSA crypto initialization state
 static bool psa_crypto_initialized = false;
 
+bool ota_common_callbacks_validate(const OTA_common_callbacks_t* callbacks)
+{
+    if (!callbacks)
+    {
+        return false;
+    }
+
+    // Validate required callbacks
+    if (!callbacks->transfer_send_cb    ||
+        !callbacks->transfer_receive_cb ||
+        !callbacks->transfer_error_cb   ||
+        !callbacks->transfer_done_cb)
+    {
+        return false;
+    }
+
+    return true;
+}
+
+void ota_common_callbacks_copy(OTA_common_callbacks_t* dest,
+                               const OTA_common_callbacks_t* src)
+{
+    if (!dest || !src)
+    {
+        return;
+    }
+
+    // Copy each callback pointer
+    dest->transfer_send_cb     = src->transfer_send_cb;
+    dest->transfer_receive_cb  = src->transfer_receive_cb;
+    dest->transfer_error_cb    = src->transfer_error_cb;
+    dest->transfer_done_cb     = src->transfer_done_cb;
+    dest->debug_log_cb         = src->debug_log_cb;
+}
+
 void ota_common_debug_log(OTA_common_ctx_t* ctx,
                           void* user_ctx,
                           const char* format,
