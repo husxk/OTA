@@ -10,22 +10,8 @@
 extern "C" {
 #endif
 
-// Server context structure
-typedef struct
-{
-    // Common OTA context
-    OTA_common_ctx_t common;
-
-    // Server-specific callbacks
-    bool (*server_get_payload_cb) (void* ctx,
-                                   const uint8_t** data,
-                                   size_t* size);
-
-    void (*server_transfer_progress_cb) (void* ctx,
-                                         uint32_t bytes_sent,
-                                         uint32_t packet_number);
-
-} OTA_server_ctx;
+// Server context structure (opaque)
+typedef struct ota_server_ctx OTA_server_ctx;
 
 // Initialize OTA server context
 // Returns: 0 on success, negative value on error
@@ -36,6 +22,16 @@ bool OTA_server_run_transfer(OTA_server_ctx* ctx, void* user_ctx);
 // Cleanup OTA server context and free resources
 // Returns: 0 on success, negative value on error
 int OTA_server_cleanup(OTA_server_ctx* ctx);
+
+// Destroy OTA server context (cleanup + free)
+// Frees all resources and the context itself
+// Safe to call with NULL
+void OTA_server_destroy(OTA_server_ctx* ctx);
+
+// Reset OTA server context state for reuse
+// Cleans up runtime state but preserves callbacks and configuration
+// Returns: 0 on success, negative value on error
+int OTA_server_reset(OTA_server_ctx* ctx);
 
 #ifdef __cplusplus
 }

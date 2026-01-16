@@ -1,10 +1,12 @@
 #include "ota_server.h"
+#include "ota_server_internal.h"
 #include "ota_common.h"
 #include "packet.h"
 #include "protocol.h"
 #include <mbedtls/ssl.h>
 #include <mbedtls/error.h>
 #include <stdarg.h>
+#include <stdlib.h>
 
 static bool ota_wait_for_response_server(OTA_server_ctx* ctx,
                                          void* user_ctx,
@@ -68,7 +70,6 @@ static bool ota_wait_for_response_server(OTA_server_ctx* ctx,
     return true;
 }
 
-
 int OTA_server_init(OTA_server_ctx* ctx)
 {
     if (!ctx)
@@ -104,22 +105,8 @@ int OTA_server_init(OTA_server_ctx* ctx)
 
 bool OTA_server_run_transfer(OTA_server_ctx* ctx, void* user_ctx)
 {
-    if (!ctx ||
-        !user_ctx)
+    if (!ctx || !user_ctx)
     {
-        return false;
-    }
-
-    // Validate required server callbacks
-    if (!ctx->server_get_payload_cb                ||
-        !ctx->common.callbacks.transfer_send_cb    ||
-        !ctx->common.callbacks.transfer_receive_cb ||
-        !ctx->common.callbacks.transfer_error_cb   ||
-        !ctx->common.callbacks.transfer_done_cb    ||
-        !ctx->server_transfer_progress_cb)
-    {
-        ota_common_debug_log(&ctx->common, user_ctx,
-                             "OTA: Missing required server callbacks\n");
         return false;
     }
 
@@ -216,5 +203,31 @@ int OTA_server_cleanup(OTA_server_ctx* ctx)
     if (!ctx)
         return -1;
 
+    return ota_common_cleanup(&ctx->common);
+}
+
+void OTA_server_destroy(OTA_server_ctx* ctx)
+{
+    if (!ctx)
+    {
+        return;
+    }
+
+    // Cleanup resources (TLS, SHA-512, etc.)
+    ota_common_cleanup(&ctx->common);
+
+    // Free the context itself
+    free(ctx);
+}
+
+int OTA_server_reset(OTA_server_ctx* ctx)
+{
+    if (!ctx)
+    {
+        return -1;
+    }
+
+    // Cleanup runtime state (TLS connections, SHA-512 operations)
+    // This preserves callbacks and configuration
     return ota_common_cleanup(&ctx->common);
 }
