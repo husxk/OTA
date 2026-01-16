@@ -105,8 +105,8 @@ main_()
 
   const int ret = workloop(ctx);
 
-  // Cleanup OTA/TLS resources before freeing context
-  OTA_client_cleanup(&ctx->ota_ctx);
+  // Destroy OTA context (cleanup + free)
+  OTA_client_destroy(ctx->ota_ctx);
 
   free(ctx);
 

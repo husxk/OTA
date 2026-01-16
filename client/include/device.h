@@ -50,7 +50,7 @@ typedef struct
 {
   tcp_ctx_t tcp;
   ota_t ota;
-  OTA_client_ctx ota_ctx;
+  OTA_client_ctx* ota_ctx;
   absolute_time_t update_timeout;  // Time when firmware update should be performed
   bool update_pending;             // True if update is scheduled
   uint32_t last_erased_sector;     // Last erased sector during firmware write

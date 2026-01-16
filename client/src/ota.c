@@ -226,62 +226,76 @@ static void transfer_reset(void* user_ctx)
     ctx->ota.current_page = 0;
 }
 
-int init_ota(OTA_client_ctx* ctx)
+OTA_client_ctx* init_ota(void)
 {
-    if (!ctx)
-        return -1;
+    OTA_client_ctx* ctx;
 
-    memset(ctx, 0, sizeof(*ctx));
-
-    // Set entropy callback for TLS (must be done before OTA_client_init)
-    if (OTA_set_entropy_cb(entropy_callback, NULL) != 0)
+    // Create builder
+    OTA_client_builder_t* builder = OTA_client_builder_create();
+    if (!builder)
     {
-        return -1;
+        return NULL;
     }
 
     // Set common transfer callbacks
-    ctx->common.callbacks.transfer_send_cb    = transfer_send;
-    ctx->common.callbacks.transfer_receive_cb = transfer_receive;
-    ctx->common.callbacks.transfer_error_cb   = transfer_error;
-    ctx->common.callbacks.transfer_done_cb    = transfer_done;
-    ctx->common.callbacks.debug_log_cb        = debug_log;
+    OTA_client_builder_set_transfer_send_cb(builder, transfer_send);
+    OTA_client_builder_set_transfer_receive_cb(builder, transfer_receive);
+    OTA_client_builder_set_transfer_error_cb(builder, transfer_error);
+    OTA_client_builder_set_transfer_done_cb(builder, transfer_done);
+    OTA_client_builder_set_debug_log_cb(builder, debug_log);
 
     // Set client storage callbacks
-    ctx->transfer_store_cb  = transfer_store;
-    ctx->transfer_reset_cb  = transfer_reset;
+    OTA_client_builder_set_transfer_store_cb(builder, transfer_store);
+    OTA_client_builder_set_transfer_reset_cb(builder, transfer_reset);
 
     // Set firmware update callbacks (RAM resident functions)
-    ctx->firmware_reboot_cb  = firmware_reboot;
-    ctx->firmware_read_cb    = firmware_read;
-    ctx->firmware_prepare_cb = firmware_prepare;
-    ctx->firmware_write_cb   = firmware_write;
+    OTA_client_builder_set_firmware_reboot_cb(builder, firmware_reboot);
+    OTA_client_builder_set_firmware_read_cb(builder, firmware_read);
+    OTA_client_builder_set_firmware_prepare_cb(builder, firmware_prepare);
+    OTA_client_builder_set_firmware_write_cb(builder, firmware_write);
+
+    // Set entropy callback for TLS
+    if (OTA_client_builder_set_entropy_cb(builder, entropy_callback, NULL) != 0)
+    {
+        DEBUG("OTA: Failed to set entropy callback\n");
+        OTA_client_builder_destroy(builder);
+        return NULL;
+    }
 
     // Set public key for SHA-512 signature verification
     const char* key_data_str = SIGNING_PUBLIC_KEY_DATA;
     size_t key_data_len = strlen(key_data_str) + 1;  // Include null terminator
 
-    if (OTA_set_sha512_public_key(&ctx->common,
-                                  (const unsigned char*)key_data_str,
-                                   key_data_len) != 0)
+    if (OTA_client_builder_set_sha512_public_key(builder,
+                                                 (const unsigned char*)key_data_str,
+                                                 key_data_len) != 0)
     {
         DEBUG("OTA: Failed to set SHA-512 public key for verification\n");
-        return -1;
+        OTA_client_builder_destroy(builder);
+        return NULL;
     }
 
-    // Enable TLS transport (must be called before OTA_client_init)
-    if (OTA_enable_tls(&ctx->common) != 0)
+    // Enable TLS transport
+    if (OTA_client_builder_enable_tls(builder) != 0)
     {
         DEBUG("OTA: Failed to enable TLS transport\n");
-        return -1;
+        OTA_client_builder_destroy(builder);
+        return NULL;
     }
 
-    // Initialize TLS context (client mode)
-    // Must be called after all callbacks are set and TLS is enabled
-    if (OTA_client_init(ctx) != 0)
+    // Build the context (fully initializes TLS, SHA-512, etc.)
+    int error_code;
+    ctx = OTA_client_builder_build(builder, &error_code);
+    if (!ctx)
     {
-        return -1;
+        DEBUG("OTA: Failed to build context (error: %d)\n", error_code);
+        OTA_client_builder_destroy(builder);
+        return NULL;
     }
 
-    return 0;
+    // Destroy builder (no longer needed after build)
+    OTA_client_builder_destroy(builder);
+
+    return ctx;
 }
 

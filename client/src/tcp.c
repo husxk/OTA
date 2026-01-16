@@ -42,7 +42,7 @@ packet_handler(device_ctx_t* ctx, struct tcp_pcb* tpcb)
   // Data will be pulled via libota callbacks
   if (ctx->tcp.pbuf_queue_head || ctx->tcp.current_node)
   {
-    OTA_client_handle_data(&ctx->ota_ctx, ctx);
+    OTA_client_handle_data(ctx->ota_ctx, ctx);
   }
 }
 
@@ -115,7 +115,7 @@ tcp_client_close(device_ctx_t* ctx)
   tcp_free_pbuf_queue(ctx);
 
   // Restart TLS context for reconnection (preserves SHA-512 keys)
-  OTA_tls_restart(&ctx->ota_ctx.common);
+  OTA_client_tls_restart(ctx->ota_ctx);
 
   // now + 5 seconds
   ctx->tcp.last_reconnect_attempt = make_timeout_time_ms(5000);
@@ -216,7 +216,7 @@ tcp_client_connected(void* ctx_, struct tcp_pcb* tpcb, err_t err)
   tcp_err(tpcb, tcp_client_err);
 
   // Reinit TLS for new connection
-  if (OTA_client_init(&ctx->ota_ctx) != 0)
+  if (OTA_client_init(ctx->ota_ctx) != 0)
   {
     DEBUG("TCP: Failed to reinitialize TLS for new connection\n");
     tcp_client_close(ctx);
@@ -307,8 +307,8 @@ tcp_work(device_ctx_t* ctx)
     //       that will dispatch this event once?
 
     // Start handshake
-    if (ota_tls_is_enabled(&ctx->ota_ctx.common) &&
-        !ota_tls_is_handshake_complete(&ctx->ota_ctx.common))
+    if (OTA_client_tls_is_enabled(ctx->ota_ctx) &&
+        !OTA_client_tls_is_handshake_complete(ctx->ota_ctx))
     {
       if (ctx->tcp.handshake_started)
         return;
@@ -329,7 +329,7 @@ tcp_work(device_ctx_t* ctx)
         return;
       }
 
-      OTA_client_handle_data(&ctx->ota_ctx, ctx);
+      OTA_client_handle_data(ctx->ota_ctx, ctx);
     }
   }
 }

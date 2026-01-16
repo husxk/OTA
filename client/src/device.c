@@ -33,7 +33,8 @@ init_device(device_ctx_t** ctx)
   (*ctx)->update_pending = false;
   (*ctx)->update_timeout = 0;
 
-  if (init_ota(&(*ctx)->ota_ctx) != 0)
+  (*ctx)->ota_ctx = init_ota();
+  if (!(*ctx)->ota_ctx)
   {
     DEBUG("OTA: Failed to initialize OTA callbacks\n");
     // OTA not initialized, no cleanup needed
@@ -46,8 +47,8 @@ init_device(device_ctx_t** ctx)
 
   if (tcp_init_client(*ctx) != 0)
   {
-    // Cleanup OTA/TLS resources before freeing context on error
-    OTA_client_cleanup(&(*ctx)->ota_ctx);
+    // Destroy OTA context (cleanup + free) on error
+    OTA_client_destroy((*ctx)->ota_ctx);
     free(*ctx);
     return -1;
   }
@@ -78,14 +79,14 @@ check_update_timeout(device_ctx_t* ctx)
     DEBUG("OTA: Flash start: 0x%08X\n", XIP_BASE);
 
     // Set up memory pointers for OTA update
-    OTA_client_setup_memory(&ctx->ota_ctx, OTA_STORAGE_START,
+    OTA_client_setup_memory(ctx->ota_ctx, OTA_STORAGE_START,
                             ctx->ota.ota_addr, XIP_BASE);
 
     // Call the library function to perform the actual flash update
     // If returns true, it will reboot the device and never return
     // If returns false, we will print an error message and return,
     //    update will not be performed
-    if (!OTA_client_write_firmware(&ctx->ota_ctx, ctx))
+    if (!OTA_client_write_firmware(ctx->ota_ctx, ctx))
     {
       DEBUG("OTA: ERROR! Flash update failed.\n"
             "OTA library configuration is invalid or callbacks are not set up\n");
