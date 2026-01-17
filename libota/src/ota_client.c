@@ -54,16 +54,26 @@ void OTA_client_destroy(OTA_client_ctx* ctx)
     free(ctx);
 }
 
-int OTA_client_reset(OTA_client_ctx* ctx)
+int OTA_client_reset(OTA_client_ctx* ctx, void* user_ctx)
 {
-    if (!ctx)
+    if (!ctx || !user_ctx)
     {
         return -1;
     }
 
-    // Cleanup runtime state (TLS connections, SHA-512 operations)
-    // This preserves callbacks and memory configuration
-    return ota_common_cleanup(&ctx->common);
+    // Reset runtime state (TLS connections, SHA-512 hash state)
+    // This preserves callbacks, memory configuration, and keys
+    int ret = ota_common_reset(&ctx->common);
+    if (ret != 0)
+    {
+        return ret;
+    }
+
+    // Reset client-specific offsets (OTA storage address, page number, etc.)
+    // This is done via the transfer_reset callback
+    ctx->transfer_reset_cb(user_ctx);
+
+    return 0;
 }
 
 int OTA_client_tls_restart(OTA_client_ctx* ctx)

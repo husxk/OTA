@@ -215,10 +215,10 @@ tcp_client_connected(void* ctx_, struct tcp_pcb* tpcb, err_t err)
   tcp_recv(tpcb, tcp_client_recv);
   tcp_err(tpcb, tcp_client_err);
 
-  // Reinit TLS for new connection
-  if (OTA_client_init(ctx->ota_ctx) != 0)
+  // Reset client state for new connection
+  if (OTA_client_reset(ctx->ota_ctx, ctx) != 0)
   {
-    DEBUG("TCP: Failed to reinitialize TLS for new connection\n");
+    DEBUG("TCP: Failed to reset client state for new connection\n");
     tcp_client_close(ctx);
 
     return ERR_ABRT;

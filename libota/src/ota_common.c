@@ -495,6 +495,41 @@ int OTA_tls_restart(OTA_common_ctx_t* ctx)
     return 0;
 }
 
+int ota_common_reset(OTA_common_ctx_t* ctx)
+{
+    if (!ctx)
+        return -1;
+
+    // Reset TLS connection state (close connection, but preserve config)
+    // This will also reset SHA-512 hash state (but preserve keys)
+    if (ctx->tls)
+    {
+        tls_context_close(ctx->tls);
+        // Don't free TLS context - keep it for reconnection
+        // The context will be reused when TLS is re-initialized
+    }
+
+    // Reset SHA-512 hash operation state (but preserve keys)
+    if (ctx->sha512.sha512_active)
+    {
+        psa_hash_abort(&ctx->sha512.sha512_operation);
+    }
+
+    memset(&ctx->sha512.sha512_operation, 0, sizeof(ctx->sha512.sha512_operation));
+    memset(ctx->sha512.sha512_hash, 0, sizeof(ctx->sha512.sha512_hash));
+    memset(ctx->sha512.sha512_signature, 0, sizeof(ctx->sha512.sha512_signature));
+
+    ctx->sha512.sha512_calculated = false;
+    ctx->sha512.sha512_active = false;
+    ctx->sha512.sha512_signature_length = 0;
+    ctx->sha512.sha512_signed = false;
+
+    // Note: We do NOT free sha512_private_key or sha512_public_key here
+    // as they should persist across reconnections
+
+    return 0;
+}
+
 int ota_common_cleanup(OTA_common_ctx_t* ctx)
 {
     if (!ctx)

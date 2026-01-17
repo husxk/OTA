@@ -31,8 +31,10 @@ void OTA_client_destroy(OTA_client_ctx* ctx);
 
 // Reset OTA client context state for reuse
 // Cleans up runtime state but preserves callbacks and configuration
+// Resets TLS connection, SHA-512 hash state, and transfer offsets
+// user_ctx: User context passed to transfer_reset_cb callback
 // Returns: 0 on success, negative value on error
-int OTA_client_reset(OTA_client_ctx* ctx);
+int OTA_client_reset(OTA_client_ctx* ctx, void* user_ctx);
 
 // TLS operations (wrapper functions for common context)
 // Restart TLS context for reconnection (preserves SHA-512 keys)
