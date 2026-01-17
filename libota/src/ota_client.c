@@ -1,8 +1,8 @@
-#include "ota_client.h"
-#include "ota_client_internal.h"
-#include "ota_common.h"
-#include "packet.h"
-#include "protocol.h"
+#include "libota/ota_client.h"
+#include "internal/ota_client_internal.h"
+#include "libota/ota_common.h"
+#include "internal/packet.h"
+#include "libota/protocol.h"
 #include <mbedtls/ssl.h>
 #include <mbedtls/error.h>
 #include <stdarg.h>

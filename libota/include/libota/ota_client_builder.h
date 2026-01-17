@@ -5,8 +5,8 @@
 #include <stdbool.h>
 #include <stdarg.h>
 
-#include "ota_client.h"
-#include "tls_context.h"
+#include "libota/ota_client.h"
+#include "libota/tls_context.h"
 
 #ifdef __cplusplus
 extern "C" {

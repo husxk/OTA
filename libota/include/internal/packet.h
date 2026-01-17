@@ -7,8 +7,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "protocol.h"
-#include "platform.h"
+#include "libota/protocol.h"
+#include "internal/platform.h"
 
 #ifdef __cplusplus
 extern "C" {

@@ -6,7 +6,7 @@
 
 // Include the generated OTA_RAM_FUNCTION definition
 #include "ota_ram_function.h"
-#include "ota_common.h"
+#include "libota/ota_common.h"
 
 #ifdef __cplusplus
 extern "C" {

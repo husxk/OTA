@@ -1,7 +1,7 @@
 #pragma once
 
-#include "ota_client.h"
-#include "ota_common.h"
+#include "libota/ota_client.h"
+#include "libota/ota_common.h"
 
 // Internal: Client-specific memory configuration structure
 typedef struct

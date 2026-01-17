@@ -5,8 +5,8 @@
 #include <stdbool.h>
 #include <stdarg.h>
 
-#include "tls_context.h"
-#include "protocol.h"
+#include "libota/tls_context.h"
+#include "libota/protocol.h"
 #include <psa/crypto.h>
 #include <mbedtls/pk.h>
 

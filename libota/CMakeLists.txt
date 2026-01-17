@@ -20,7 +20,8 @@ configure_file(
 )
 
 file(GLOB LIBOTA_SOURCES "src/*.c")
-file(GLOB LIBOTA_HEADERS "include/*.h")
+file(GLOB LIBOTA_PUBLIC_HEADERS "include/libota/*.h")
+file(GLOB LIBOTA_PRIVATE_HEADERS "include/internal/*.h")
 
 add_library(${PROJECT_NAME} STATIC ${LIBOTA_SOURCES})
 
@@ -45,10 +46,11 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
 )
 
 set_target_properties(${PROJECT_NAME} PROPERTIES
-  PUBLIC_HEADER "${LIBOTA_HEADERS}")
+  PUBLIC_HEADER "${LIBOTA_PUBLIC_HEADERS}")
 
 target_include_directories(${PROJECT_NAME}
     PUBLIC include
+    PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include/internal"
     PUBLIC "${CMAKE_CURRENT_BINARY_DIR}/generated")
 
 # Install the library and headers

@@ -1,7 +1,7 @@
-#include "ota_common.h"
-#include "tls_context.h"
-#include "protocol.h"
-#include "packet.h"
+#include "libota/ota_common.h"
+#include "libota/tls_context.h"
+#include "libota/protocol.h"
+#include "internal/packet.h"
 #include <mbedtls/error.h>
 #include <mbedtls/ssl.h>
 #include <mbedtls/md.h>

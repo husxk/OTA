@@ -3,8 +3,8 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
-#include "ota_common.h"
-#include "tls_context.h"
+#include "libota/ota_common.h"
+#include "libota/tls_context.h"
 
 #ifdef __cplusplus
 extern "C" {

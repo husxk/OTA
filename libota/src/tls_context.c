@@ -1,5 +1,5 @@
-#include "ota_common.h"
-#include "tls_context.h"
+#include "libota/ota_common.h"
+#include "libota/tls_context.h"
 #include <mbedtls/ssl.h>
 #include <mbedtls/error.h>
 #include <mbedtls/platform.h>

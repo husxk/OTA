@@ -1,5 +1,5 @@
-#include "packet.h"
-#include "platform.h"
+#include "internal/packet.h"
+#include "internal/platform.h"
 
 #include <string.h>
 
