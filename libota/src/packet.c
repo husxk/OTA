@@ -3,7 +3,7 @@
 
 #include <string.h>
 
-size_t OTA_packet_write_ack(uint8_t* buffer, size_t size)
+size_t ota_packet_write_ack(uint8_t* buffer, size_t size)
 {
     if (!buffer || size < OTA_ACK_PACKET_LENGTH)
     {
@@ -18,7 +18,7 @@ size_t OTA_packet_write_ack(uint8_t* buffer, size_t size)
     return OTA_ACK_PACKET_LENGTH;
 }
 
-size_t OTA_packet_write_nack(uint8_t* buffer, size_t size)
+size_t ota_packet_write_nack(uint8_t* buffer, size_t size)
 {
     if (!buffer || size < OTA_NACK_PACKET_LENGTH)
     {
@@ -33,7 +33,7 @@ size_t OTA_packet_write_nack(uint8_t* buffer, size_t size)
     return OTA_NACK_PACKET_LENGTH;
 }
 
-size_t OTA_packet_write_fin(uint8_t* buffer,
+size_t ota_packet_write_fin(uint8_t* buffer,
                             size_t size,
                             const uint8_t* signature,
                             size_t signature_len)
@@ -60,7 +60,7 @@ size_t OTA_packet_write_fin(uint8_t* buffer,
     return OTA_FIN_PACKET_LENGTH;
 }
 
-uint8_t OTA_packet_get_type(const uint8_t* buffer, size_t size)
+uint8_t ota_packet_get_type(const uint8_t* buffer, size_t size)
 {
     if (!buffer || size < OTA_COMMON_PACKET_LENGTH)
     {
@@ -105,7 +105,7 @@ uint8_t OTA_packet_get_type(const uint8_t* buffer, size_t size)
     }
 }
 
-size_t OTA_packet_write_data(uint8_t* buffer,
+size_t ota_packet_write_data(uint8_t* buffer,
                              size_t size,
                              const uint8_t* data,
                              size_t data_size)
@@ -131,7 +131,7 @@ size_t OTA_packet_write_data(uint8_t* buffer,
     return OTA_DATA_PACKET_LENGTH;
 }
 
-const uint8_t* OTA_packet_get_data(const uint8_t* buffer, size_t size)
+const uint8_t* ota_packet_get_data(const uint8_t* buffer, size_t size)
 {
     if (!buffer || size < OTA_DATA_PACKET_LENGTH)
     {
@@ -151,7 +151,7 @@ const uint8_t* OTA_packet_get_data(const uint8_t* buffer, size_t size)
     return &buffer[OTA_COMMON_PACKET_LENGTH];
 }
 
-const uint8_t* OTA_packet_get_fin_signature(const uint8_t* buffer,
+const uint8_t* ota_packet_get_fin_signature(const uint8_t* buffer,
                                             size_t size,
                                             size_t* signature_len)
 {

@@ -175,7 +175,7 @@ static bool OTA_client_handle_data_packet(OTA_client_ctx* ctx,
     }
 
     // Validate the packet
-    const uint8_t* payload = OTA_packet_get_data(buffer, size);
+    const uint8_t* payload = ota_packet_get_data(buffer, size);
     if (payload == NULL)
     {
         ota_common_transfer_error(&ctx->common, user_ctx, "Invalid packet format");
@@ -232,7 +232,7 @@ bool OTA_client_handle_data(OTA_client_ctx* ctx,
         return false;
     }
 
-    uint8_t packet_type = OTA_packet_get_type(buffer, size);
+    uint8_t packet_type = ota_packet_get_type(buffer, size);
 
     switch (packet_type)
     {
@@ -265,7 +265,7 @@ bool OTA_client_handle_data(OTA_client_ctx* ctx,
             // Extract signature from FIN packet
             size_t received_signature_len = 0;
             const uint8_t* received_signature =
-                OTA_packet_get_fin_signature(buffer,
+                ota_packet_get_fin_signature(buffer,
                                              size,
                                              &received_signature_len);
 

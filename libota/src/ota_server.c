@@ -46,7 +46,7 @@ static bool ota_wait_for_response_server(OTA_server_ctx* ctx,
         return false;
     }
 
-    uint8_t packet_type = OTA_packet_get_type(response_buffer, response_size);
+    uint8_t packet_type = ota_packet_get_type(response_buffer, response_size);
 
     if (packet_type != expected_type)
     {

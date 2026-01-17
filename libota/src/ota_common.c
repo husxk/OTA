@@ -969,7 +969,7 @@ bool ota_send_data_packet(OTA_common_ctx_t* ctx,
 
     uint8_t send_buffer[OTA_DATA_PACKET_LENGTH];
     size_t bytes_written =
-        OTA_packet_write_data(send_buffer,
+        ota_packet_write_data(send_buffer,
                               sizeof(send_buffer),
                               data,
                               size);
@@ -995,7 +995,7 @@ void ota_send_ack_packet(OTA_common_ctx_t* ctx, void* user_ctx)
     }
 
     uint8_t ack_buffer[OTA_ACK_PACKET_LENGTH];
-    size_t ack_size = OTA_packet_write_ack(ack_buffer, sizeof(ack_buffer));
+    size_t ack_size = ota_packet_write_ack(ack_buffer, sizeof(ack_buffer));
     if (ack_size > 0)
     {
         OTA_send_data(ctx, user_ctx, ack_buffer, ack_size);
@@ -1010,7 +1010,7 @@ void ota_send_nack_packet(OTA_common_ctx_t* ctx, void* user_ctx)
     }
 
     uint8_t nack_buffer[OTA_NACK_PACKET_LENGTH];
-    size_t nack_size = OTA_packet_write_nack(nack_buffer, sizeof(nack_buffer));
+    size_t nack_size = ota_packet_write_nack(nack_buffer, sizeof(nack_buffer));
     if (nack_size > 0)
     {
         OTA_send_data(ctx, user_ctx, nack_buffer, nack_size);
@@ -1043,7 +1043,7 @@ bool ota_send_fin_packet(OTA_common_ctx_t* ctx, void* user_ctx)
         return false;
     }
 
-    size_t fin_size = OTA_packet_write_fin(fin_buffer,
+    size_t fin_size = ota_packet_write_fin(fin_buffer,
                                            sizeof(fin_buffer),
                                            ctx->sha512.sha512_signature,
                                            ctx->sha512.sha512_signature_length);
