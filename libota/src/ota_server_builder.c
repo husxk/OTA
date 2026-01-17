@@ -193,7 +193,7 @@ OTA_server_builder_build(OTA_server_builder_t* builder, int* error_code)
     }
 
     // Initialize server context (includes TLS init if enabled)
-    if (OTA_server_init(ctx) != 0)
+    if (ota_server_init(ctx) != 0)
     {
         if (error_code)
         {

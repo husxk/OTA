@@ -20,10 +20,6 @@ void OTA_client_setup_memory(OTA_client_ctx* ctx,
                              uint32_t ota_storage_end,
                              uint32_t flash_start);
 
-// Initialize OTA client context
-// Returns: 0 on success, negative value on error
-int OTA_client_init(OTA_client_ctx* ctx);
-
 // Cleanup OTA client context and free resources
 // Returns: 0 on success, negative value on error
 int OTA_client_cleanup(OTA_client_ctx* ctx);

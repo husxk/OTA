@@ -93,3 +93,13 @@ struct ota_client_ctx
     // Called when transfer fails or needs to be restarted
     void (*transfer_reset_cb)(void* ctx);
 };
+
+// Internal: Initialize OTA client context
+// Returns: 0 on success, negative value on error
+int ota_client_init(OTA_client_ctx* ctx);
+
+// Internal: Helper function for handling DATA packets
+bool ota_client_handle_data_packet(OTA_client_ctx* ctx,
+                                    void* user_ctx,
+                                    const uint8_t* buffer,
+                                    size_t size);

@@ -342,7 +342,7 @@ OTA_client_builder_build(OTA_client_builder_t* builder, int* error_code)
     }
 
     // Initialize client context (includes TLS init if enabled)
-    if (OTA_client_init(ctx) != 0)
+    if (ota_client_init(ctx) != 0)
     {
         if (error_code)
         {

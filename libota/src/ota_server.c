@@ -8,7 +8,7 @@
 #include <stdarg.h>
 #include <stdlib.h>
 
-static bool ota_wait_for_response_server(OTA_server_ctx* ctx,
+static bool ota_server_wait_for_response(OTA_server_ctx* ctx,
                                          void* user_ctx,
                                          uint8_t expected_type)
 {
@@ -70,39 +70,6 @@ static bool ota_wait_for_response_server(OTA_server_ctx* ctx,
     return true;
 }
 
-int OTA_server_init(OTA_server_ctx* ctx)
-{
-    if (!ctx)
-    {
-        return -1;
-    }
-
-    // Only initialize TLS if it's enabled
-    if (ctx->common.tls_enabled)
-    {
-        // Check if PKI data is set (required for TLS server)
-        if (!ota_tls_is_pki_data_set(&ctx->common))
-        {
-            ota_common_debug_log(&ctx->common, NULL,
-                                 "Error: PKI data not set. "
-                                 "Call OTA_set_pki_data() first\n");
-            return -1;
-        }
-
-        // Set endpoint type for server
-        if (ota_tls_set_endpoint(&ctx->common, MBEDTLS_SSL_IS_SERVER) != 0)
-        {
-            return -1;
-        }
-
-        // Use common TLS initialization function
-        return ota_common_tls_init(&ctx->common);
-    }
-
-    // TLS not enabled, skip initialization
-    return 0;
-}
-
 bool OTA_server_run_transfer(OTA_server_ctx* ctx, void* user_ctx)
 {
     if (!ctx || !user_ctx)
@@ -158,7 +125,7 @@ bool OTA_server_run_transfer(OTA_server_ctx* ctx, void* user_ctx)
                 return false;
             }
 
-            if (!ota_wait_for_response_server(ctx, user_ctx, OTA_ACK_TYPE))
+            if (!ota_server_wait_for_response(ctx, user_ctx, OTA_ACK_TYPE))
             {
                 return false;
             }
@@ -174,7 +141,7 @@ bool OTA_server_run_transfer(OTA_server_ctx* ctx, void* user_ctx)
             return false;
         }
 
-        if (!ota_wait_for_response_server(ctx, user_ctx, 0x01)) // OTA_ACK_TYPE
+        if (!ota_server_wait_for_response(ctx, user_ctx, OTA_ACK_TYPE))
         {
             return false;
         }

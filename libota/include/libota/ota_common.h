@@ -162,13 +162,19 @@ int ota_common_tls_cleanup(OTA_common_ctx_t* ctx);
 // Returns: 0 on success, negative value on error
 int OTA_tls_restart(OTA_common_ctx_t* ctx);
 
+// Reset common context state (TLS connection + SHA-512 hash state)
+// Preserves TLS config, SHA-512 keys, and callbacks
+// Use this for reconnection scenarios
+// Returns: 0 on success, negative value on error
+int ota_common_reset(OTA_common_ctx_t* ctx);
+
 // Full cleanup of common context (TLS + SHA-512 keys)
 // Use this for final destruction, not for reconnection scenarios
 // Returns: 0 on success, negative value on error
 int ota_common_cleanup(OTA_common_ctx_t* ctx);
 
 // Set PKI data (certificate and private key) for TLS server mode
-// Must be called before OTA_server_init
+// Must be called before ota_server_init
 // Data is stored as shallow copy.
 // Returns: 0 on success, negative value on error
 int OTA_set_pki_data(OTA_common_ctx_t* ctx,

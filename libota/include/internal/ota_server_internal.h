@@ -37,3 +37,7 @@ struct ota_server_ctx
 
 // Note: OTA_server_callbacks_t matches the callback fields in struct ota_server_ctx
 // for consistency with client implementation
+
+// Internal: Initialize OTA server context
+// Returns: 0 on success, negative value on error
+int ota_server_init(OTA_server_ctx* ctx);
