@@ -1,7 +1,7 @@
 #pragma once
 
 #include "libota/tls_context.h"
-#include "internal/ota_common.h"
+#include "internal/ota_common_internal.h"
 #include <stdbool.h>
 #include <mbedtls/ssl.h>
 #include <mbedtls/x509_crt.h>

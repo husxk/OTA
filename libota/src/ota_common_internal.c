@@ -1,4 +1,4 @@
-#include "internal/ota_common.h"
+#include "internal/ota_common_internal.h"
 #include "internal/tls_context_internal.h"
 #include "libota/protocol.h"
 #include "internal/packet.h"

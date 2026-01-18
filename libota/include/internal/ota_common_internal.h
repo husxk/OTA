@@ -3,6 +3,11 @@
 #include "libota/ota_common.h"
 #include "libota/tls_context.h"
 #include "internal/tls_context_internal.h"
+#include <stdbool.h>
+#include <stdarg.h>
+#include "libota/protocol.h"
+#include <psa/crypto.h>
+#include <mbedtls/pk.h>
 
 #ifdef __cplusplus
 extern "C" {

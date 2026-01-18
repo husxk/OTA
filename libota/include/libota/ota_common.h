@@ -2,12 +2,6 @@
 
 #include <stdint.h>
 #include <stddef.h>
-#include <stdbool.h>
-#include <stdarg.h>
-
-#include "libota/protocol.h"
-#include <psa/crypto.h>
-#include <mbedtls/pk.h>
 
 #ifdef __cplusplus
 extern "C" {

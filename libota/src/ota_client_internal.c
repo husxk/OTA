@@ -1,5 +1,5 @@
 #include "internal/ota_client_internal.h"
-#include "internal/ota_common.h"
+#include "internal/ota_common_internal.h"
 #include "internal/packet.h"
 #include "libota/protocol.h"
 #include <mbedtls/ssl.h>

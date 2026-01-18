@@ -1,6 +1,6 @@
 #include "libota/ota_server_builder.h"
 #include "internal/ota_server_internal.h"
-#include "internal/ota_common.h"
+#include "internal/ota_common_internal.h"
 #include "libota/tls_context.h"
 #include <stdlib.h>
 #include <string.h>
