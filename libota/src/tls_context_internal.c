@@ -1,5 +1,5 @@
 #include "internal/ota_common.h"
-#include "libota/tls_context.h"
+#include "internal/tls_context_internal.h"
 #include <mbedtls/ssl.h>
 #include <mbedtls/error.h>
 #include <mbedtls/platform.h>
@@ -52,7 +52,7 @@ struct tls_context
 };
 
 // Platform entropy function called by mbedTLS PSA Crypto
-// Calls user's entropy callback if set via tls_set_entropy_callback()
+// Calls user's entropy callback if set via ota_tls_set_entropy_callback()
 int mbedtls_platform_get_entropy(psa_driver_get_entropy_flags_t flags,
                                   size_t *estimate_bits,
                                   unsigned char *output,
@@ -79,7 +79,7 @@ int mbedtls_platform_get_entropy(psa_driver_get_entropy_flags_t flags,
     return PSA_SUCCESS;
 }
 
-int tls_set_entropy_callback(tls_entropy_cb_t entropy_cb, void* entropy_ctx)
+int ota_tls_set_entropy_callback(tls_entropy_cb_t entropy_cb, void* entropy_ctx)
 {
     if (!entropy_cb)
         return -1;
@@ -90,12 +90,12 @@ int tls_set_entropy_callback(tls_entropy_cb_t entropy_cb, void* entropy_ctx)
     return 0;
 }
 
-bool tls_is_entropy_callback_set(void)
+bool ota_tls_is_entropy_callback_set(void)
 {
     return entropy_callback != NULL;
 }
 
-int tls_set_pki_data(tls_context_t* ctx,
+int ota_tls_context_set_pki_data(tls_context_t* ctx,
                      const unsigned char* cert_data,
                      size_t cert_len,
                      const unsigned char* key_data,
@@ -112,7 +112,7 @@ int tls_set_pki_data(tls_context_t* ctx,
     return 0;
 }
 
-bool tls_is_pki_data_set(tls_context_t* ctx)
+bool ota_tls_context_is_pki_data_set(tls_context_t* ctx)
 {
     if (!ctx)
         return false;
@@ -279,7 +279,7 @@ static int tls_setup_pki(tls_context_t* ctx, mbedtls_ssl_config* config)
     return 0;
 }
 
-tls_context_t* tls_context_alloc()
+tls_context_t* ota_tls_context_alloc(void)
 {
     tls_context_t* ctx = (tls_context_t*) calloc(1, sizeof(tls_context_t));
 
@@ -289,7 +289,7 @@ tls_context_t* tls_context_alloc()
     return ctx;
 }
 
-int tls_context_init(tls_context_t* ctx)
+int ota_tls_context_init(tls_context_t* ctx)
 {
     int ret = 0;
 
@@ -306,7 +306,7 @@ int tls_context_init(tls_context_t* ctx)
     {
         ota_common_debug_log(ctx->ota_ctx, NULL,
                              "Error: Endpoint type not set. "
-                             "Call tls_context_set_endpoint() first\n");
+                             "Call ota_tls_context_set_endpoint() first\n");
         return -1;
     }
 
@@ -372,7 +372,7 @@ int tls_context_init(tls_context_t* ctx)
     // For server, PKI is required
     if (endpoint == MBEDTLS_SSL_IS_SERVER)
     {
-        if (!tls_is_pki_data_set(ctx))
+        if (!ota_tls_context_is_pki_data_set(ctx))
         {
             ota_common_debug_log(ctx->ota_ctx, NULL,
                                  "Error: Server requires certificate and key\n");
@@ -464,7 +464,7 @@ cleanup:
     return ret;
 }
 
-int tls_context_handshake(tls_context_t* ctx)
+int ota_tls_context_handshake(tls_context_t* ctx)
 {
     if (!ctx ||
         !ctx->initialized)
@@ -472,7 +472,7 @@ int tls_context_handshake(tls_context_t* ctx)
         return -1;
     }
 
-    if (tls_context_handshake_complete(ctx))
+    if (ota_tls_context_handshake_complete(ctx))
       return 0;
 
     mbedtls_ssl_context* ssl = ctx->tls_ctx;
@@ -508,7 +508,7 @@ int tls_context_handshake(tls_context_t* ctx)
     }
 }
 
-bool tls_context_handshake_complete(tls_context_t* ctx)
+bool ota_tls_context_handshake_complete(tls_context_t* ctx)
 {
     if (!ctx              ||
         !ctx->initialized ||
@@ -521,7 +521,7 @@ bool tls_context_handshake_complete(tls_context_t* ctx)
     return (mbedtls_ssl_is_handshake_over(ssl) != 0);
 }
 
-void tls_context_set_user_context(tls_context_t* ctx, void* user_ctx)
+void ota_tls_context_set_user_context(tls_context_t* ctx, void* user_ctx)
 {
     if (!ctx)
         return;
@@ -529,7 +529,7 @@ void tls_context_set_user_context(tls_context_t* ctx, void* user_ctx)
     ctx->user_ctx = user_ctx;
 }
 
-void tls_context_set_ota_context(tls_context_t* ctx, OTA_common_ctx_t* ota_ctx)
+void ota_tls_context_set_ota_context(tls_context_t* ctx, OTA_common_ctx_t* ota_ctx)
 {
     if (!ctx)
         return;
@@ -537,7 +537,7 @@ void tls_context_set_ota_context(tls_context_t* ctx, OTA_common_ctx_t* ota_ctx)
     ctx->ota_ctx = ota_ctx;
 }
 
-bool tls_context_is_initialized(tls_context_t* ctx)
+bool ota_tls_context_is_initialized(tls_context_t* ctx)
 {
     if (!ctx)
         return false;
@@ -545,7 +545,7 @@ bool tls_context_is_initialized(tls_context_t* ctx)
     return ctx->initialized;
 }
 
-int tls_context_set_endpoint(tls_context_t* ctx, int endpoint)
+int ota_tls_context_set_endpoint(tls_context_t* ctx, int endpoint)
 {
     if (!ctx)
         return -1;
@@ -560,7 +560,7 @@ int tls_context_set_endpoint(tls_context_t* ctx, int endpoint)
     return 0;
 }
 
-int tls_context_get_endpoint(tls_context_t* ctx)
+int ota_tls_context_get_endpoint(tls_context_t* ctx)
 {
     if (!ctx)
         return -1;
@@ -568,7 +568,7 @@ int tls_context_get_endpoint(tls_context_t* ctx)
     return ctx->endpoint;
 }
 
-static bool tls_context_ensure_handshake(tls_context_t* ctx)
+static bool ota_tls_context_ensure_handshake(tls_context_t* ctx)
 {
     if (!ctx || !ctx->initialized)
     {
@@ -576,13 +576,13 @@ static bool tls_context_ensure_handshake(tls_context_t* ctx)
     }
 
     // Check if handshake is already complete
-    if (tls_context_handshake_complete(ctx))
+    if (ota_tls_context_handshake_complete(ctx))
     {
         return true;
     }
 
     // Handshake not complete, try to perform it (non-blocking)
-    int handshake_ret = tls_context_handshake(ctx);
+    int handshake_ret = ota_tls_context_handshake(ctx);
 
     if (handshake_ret != 0 &&
         handshake_ret != MBEDTLS_ERR_SSL_WANT_READ &&
@@ -593,10 +593,10 @@ static bool tls_context_ensure_handshake(tls_context_t* ctx)
     }
 
     // Return true if handshake is now complete, false if still in progress
-    return tls_context_handshake_complete(ctx);
+    return ota_tls_context_handshake_complete(ctx);
 }
 
-int tls_context_send(tls_context_t* ctx,
+int ota_tls_context_send(tls_context_t* ctx,
                      const uint8_t* data,
                      size_t size)
 {
@@ -613,7 +613,7 @@ int tls_context_send(tls_context_t* ctx,
         return -1;
 
     // Ensure handshake is complete before sending
-    if (!tls_context_ensure_handshake(ctx))
+    if (!ota_tls_context_ensure_handshake(ctx))
     {
         // Handshake not complete or error, cannot send data yet
         return 0;
@@ -638,7 +638,7 @@ int tls_context_send(tls_context_t* ctx,
     return (int)total_sent;
 }
 
-int tls_context_receive(tls_context_t* ctx,
+int ota_tls_context_receive(tls_context_t* ctx,
                         uint8_t* data,
                         size_t size)
 {
@@ -655,7 +655,7 @@ int tls_context_receive(tls_context_t* ctx,
         return -1;
 
     // Ensure handshake is complete before reading
-    if (!tls_context_ensure_handshake(ctx))
+    if (!ota_tls_context_ensure_handshake(ctx))
     {
         // Handshake not complete or error, no data available yet
         return 0;
@@ -694,7 +694,7 @@ int tls_context_receive(tls_context_t* ctx,
     return ret;
 }
 
-int tls_context_close(tls_context_t* ctx)
+int ota_tls_context_close(tls_context_t* ctx)
 {
     if (!ctx ||
         !ctx->initialized)
@@ -716,7 +716,7 @@ int tls_context_close(tls_context_t* ctx)
     return 0;
 }
 
-int tls_context_free(tls_context_t* ctx)
+int ota_tls_context_free(tls_context_t* ctx)
 {
     if (!ctx)
         return -1;
@@ -724,7 +724,7 @@ int tls_context_free(tls_context_t* ctx)
     if (ctx->initialized)
     {
         // Close connection gracefully first
-        tls_context_close(ctx);
+        ota_tls_context_close(ctx);
 
         if (ctx->tls_ctx)
         {

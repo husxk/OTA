@@ -1,5 +1,5 @@
 #include "internal/ota_common.h"
-#include "libota/tls_context.h"
+#include "internal/tls_context_internal.h"
 #include "libota/protocol.h"
 #include "internal/packet.h"
 #include <mbedtls/error.h>
@@ -95,7 +95,7 @@ void ota_send_data(OTA_common_ctx_t* ctx,
     // Use TLS if enabled, otherwise use plain callback
     if (ctx->tls_enabled && ctx->tls)
     {
-        tls_context_send(ctx->tls, data, size);
+        ota_tls_context_send(ctx->tls, data, size);
     }
     else if (ctx->callbacks.transfer_send_cb)
     {
@@ -126,8 +126,8 @@ size_t ota_recv_data(OTA_common_ctx_t* ctx,
             ota_tls_set_user_context(ctx, user_ctx);
         }
 
-        // Handshake checking is done inside tls_context_receive
-        int ret = tls_context_receive(ctx->tls, buffer, max_size);
+        // Handshake checking is done inside ota_tls_context_receive
+        int ret = ota_tls_context_receive(ctx->tls, buffer, max_size);
 
         if (ret < 0)
             return 0;
@@ -144,7 +144,7 @@ size_t ota_recv_data(OTA_common_ctx_t* ctx,
 
 int ota_set_entropy_cb(tls_entropy_cb_t entropy_cb, void* entropy_ctx)
 {
-    return tls_set_entropy_callback(entropy_cb, entropy_ctx);
+    return ota_tls_set_entropy_callback(entropy_cb, entropy_ctx);
 }
 
 // Ensure PSA crypto is initialized
@@ -179,12 +179,12 @@ int ota_set_pki_data(OTA_common_ctx_t* ctx,
     // Allocate TLS context if not already allocated
     if (!ctx->tls)
     {
-        ctx->tls = tls_context_alloc();
+        ctx->tls = ota_tls_context_alloc();
         if (!ctx->tls)
             return -1;
     }
 
-    return tls_set_pki_data(ctx->tls, cert_data, cert_len, key_data, key_len);
+    return ota_tls_context_set_pki_data(ctx->tls, cert_data, cert_len, key_data, key_len);
 }
 
 bool ota_tls_is_pki_data_set(OTA_common_ctx_t* ctx)
@@ -192,7 +192,7 @@ bool ota_tls_is_pki_data_set(OTA_common_ctx_t* ctx)
     if (!ctx || !ctx->tls)
         return false;
 
-    return tls_is_pki_data_set(ctx->tls);
+    return ota_tls_context_is_pki_data_set(ctx->tls);
 }
 
 void ota_tls_set_user_context(OTA_common_ctx_t* ctx, void* user_ctx)
@@ -200,7 +200,7 @@ void ota_tls_set_user_context(OTA_common_ctx_t* ctx, void* user_ctx)
     if (!ctx || !ctx->tls)
         return;
 
-    tls_context_set_user_context(ctx->tls, user_ctx);
+    ota_tls_context_set_user_context(ctx->tls, user_ctx);
 }
 
 bool ota_tls_is_handshake_complete(OTA_common_ctx_t* ctx)
@@ -208,7 +208,7 @@ bool ota_tls_is_handshake_complete(OTA_common_ctx_t* ctx)
     if (!ctx || !ctx->tls)
         return false;
 
-    return tls_context_handshake_complete(ctx->tls);
+    return ota_tls_context_handshake_complete(ctx->tls);
 }
 
 int ota_tls_close(OTA_common_ctx_t* ctx)
@@ -216,7 +216,7 @@ int ota_tls_close(OTA_common_ctx_t* ctx)
     if (!ctx || !ctx->tls)
         return -1;
 
-    return tls_context_close(ctx->tls);
+    return ota_tls_context_close(ctx->tls);
 }
 
 static int ota_tls_handshake(OTA_common_ctx_t* ctx, void* user_ctx)
@@ -230,7 +230,7 @@ static int ota_tls_handshake(OTA_common_ctx_t* ctx, void* user_ctx)
         ota_tls_set_user_context(ctx, user_ctx);
     }
 
-    return tls_context_handshake(ctx->tls);
+    return ota_tls_context_handshake(ctx->tls);
 }
 
 static bool ota_common_tls_handshake_blocking(OTA_common_ctx_t* ctx,
@@ -331,17 +331,17 @@ int ota_tls_set_endpoint(OTA_common_ctx_t* ctx, int endpoint)
     // Allocate TLS context if not already allocated
     if (!ctx->tls)
     {
-        ctx->tls = tls_context_alloc();
+        ctx->tls = ota_tls_context_alloc();
         if (!ctx->tls)
         {
             ota_common_debug_log(ctx, NULL,
                                  "Error: Failed to allocate TLS context\n");
             return -1;
         }
-        tls_context_set_ota_context(ctx->tls, ctx);
+        ota_tls_context_set_ota_context(ctx->tls, ctx);
     }
 
-    return tls_context_set_endpoint(ctx->tls, endpoint);
+    return ota_tls_context_set_endpoint(ctx->tls, endpoint);
 }
 
 int ota_common_tls_init(OTA_common_ctx_t* ctx)
@@ -356,7 +356,7 @@ int ota_common_tls_init(OTA_common_ctx_t* ctx)
         return 0;
     }
 
-    if (!tls_is_entropy_callback_set())
+    if (!ota_tls_is_entropy_callback_set())
     {
         ota_common_debug_log(ctx, NULL,
                              "Error: Entropy callback not set. "
@@ -367,7 +367,7 @@ int ota_common_tls_init(OTA_common_ctx_t* ctx)
     // Allocate TLS context if not already allocated
     if (!ctx->tls)
     {
-        ctx->tls = tls_context_alloc();
+        ctx->tls = ota_tls_context_alloc();
         if (!ctx->tls)
         {
             ota_common_debug_log(ctx, NULL,
@@ -376,20 +376,20 @@ int ota_common_tls_init(OTA_common_ctx_t* ctx)
         }
     }
 
-    tls_context_set_ota_context(ctx->tls, ctx);
-    tls_context_set_user_context(ctx->tls, NULL); // Will be set when transfer starts
+    ota_tls_context_set_ota_context(ctx->tls, ctx);
+    ota_tls_context_set_user_context(ctx->tls, NULL); // Will be set when transfer starts
 
     ota_common_debug_log(ctx, NULL,
                          "Initializing TLS context...\n");
 
-    int ret = tls_context_init(ctx->tls);
+    int ret = ota_tls_context_init(ctx->tls);
     if (ret != 0)
     {
         char error_buf[256];
         mbedtls_strerror(ret, error_buf, sizeof(error_buf));
 
         ota_common_debug_log(ctx, NULL,
-                             "Error: tls_context_init() failed: "
+                             "Error: ota_tls_context_init() failed: "
                              "%d (%s)\n",
                              ret, error_buf);
         return ret;
@@ -433,8 +433,8 @@ int ota_common_tls_cleanup(OTA_common_ctx_t* ctx)
     // Close and free TLS context
     if (ctx->tls)
     {
-        tls_context_close(ctx->tls);
-        tls_context_free(ctx->tls);
+        ota_tls_context_close(ctx->tls);
+        ota_tls_context_free(ctx->tls);
         ctx->tls = NULL;
     }
 
@@ -468,7 +468,7 @@ int ota_tls_restart(OTA_common_ctx_t* ctx)
     int endpoint = -1;
     if (ctx->tls)
     {
-        endpoint = tls_context_get_endpoint(ctx->tls);
+        endpoint = ota_tls_context_get_endpoint(ctx->tls);
     }
 
     // Close and free existing TLS context
@@ -478,7 +478,7 @@ int ota_tls_restart(OTA_common_ctx_t* ctx)
     if (ctx->tls_enabled && endpoint != -1)
     {
         // Allocate new TLS context and set endpoint
-        ctx->tls = tls_context_alloc();
+        ctx->tls = ota_tls_context_alloc();
         if (!ctx->tls)
         {
             ota_common_debug_log(ctx, NULL,
@@ -486,8 +486,8 @@ int ota_tls_restart(OTA_common_ctx_t* ctx)
             return -1;
         }
 
-        tls_context_set_ota_context(ctx->tls, ctx);
-        tls_context_set_endpoint(ctx->tls, endpoint);
+        ota_tls_context_set_ota_context(ctx->tls, ctx);
+        ota_tls_context_set_endpoint(ctx->tls, endpoint);
 
         return ota_common_tls_init(ctx);
     }
@@ -504,7 +504,7 @@ int ota_common_reset(OTA_common_ctx_t* ctx)
     // This will also reset SHA-512 hash state (but preserve keys)
     if (ctx->tls)
     {
-        tls_context_close(ctx->tls);
+        ota_tls_context_close(ctx->tls);
         // Don't free TLS context - keep it for reconnection
         // The context will be reused when TLS is re-initialized
     }

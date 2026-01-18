@@ -2,6 +2,7 @@
 
 #include "libota/ota_common.h"
 #include "libota/tls_context.h"
+#include "internal/tls_context_internal.h"
 
 #ifdef __cplusplus
 extern "C" {
