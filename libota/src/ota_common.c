@@ -1,4 +1,4 @@
-#include "libota/ota_common.h"
+#include "internal/ota_common.h"
 #include "libota/tls_context.h"
 #include "libota/protocol.h"
 #include "internal/packet.h"
@@ -80,7 +80,7 @@ void ota_common_transfer_error(OTA_common_ctx_t* ctx,
     ctx->callbacks.transfer_error_cb(user_ctx, error_msg);
 }
 
-void OTA_send_data(OTA_common_ctx_t* ctx,
+void ota_send_data(OTA_common_ctx_t* ctx,
                    void* user_ctx,
                    const uint8_t* data,
                    size_t size)
@@ -105,7 +105,7 @@ void OTA_send_data(OTA_common_ctx_t* ctx,
 
 // TODO: We should collect data and create packet from it.
 // Data could come fragmented or sth?
-size_t OTA_recv_data(OTA_common_ctx_t* ctx,
+size_t ota_recv_data(OTA_common_ctx_t* ctx,
                      void* user_ctx,
                      uint8_t* buffer,
                      size_t max_size)
@@ -142,7 +142,7 @@ size_t OTA_recv_data(OTA_common_ctx_t* ctx,
     return 0;
 }
 
-int OTA_set_entropy_cb(tls_entropy_cb_t entropy_cb, void* entropy_ctx)
+int ota_set_entropy_cb(tls_entropy_cb_t entropy_cb, void* entropy_ctx)
 {
     return tls_set_entropy_callback(entropy_cb, entropy_ctx);
 }
@@ -167,7 +167,7 @@ int ota_common_ensure_psa_crypto_init(void)
     return 0;
 }
 
-int OTA_set_pki_data(OTA_common_ctx_t* ctx,
+int ota_set_pki_data(OTA_common_ctx_t* ctx,
                      const unsigned char* cert_data,
                      size_t cert_len,
                      const unsigned char* key_data,
@@ -360,7 +360,7 @@ int ota_common_tls_init(OTA_common_ctx_t* ctx)
     {
         ota_common_debug_log(ctx, NULL,
                              "Error: Entropy callback not set. "
-                             "Call OTA_set_entropy_cb() first\n");
+                             "Call ota_set_entropy_cb() first\n");
         return -1;
     }
 
@@ -401,7 +401,7 @@ int ota_common_tls_init(OTA_common_ctx_t* ctx)
     return 0;
 }
 
-int OTA_enable_tls(OTA_common_ctx_t* ctx)
+int ota_enable_tls(OTA_common_ctx_t* ctx)
 {
     if (!ctx)
     {
@@ -459,7 +459,7 @@ int ota_common_tls_cleanup(OTA_common_ctx_t* ctx)
     return 0;
 }
 
-int OTA_tls_restart(OTA_common_ctx_t* ctx)
+int ota_tls_restart(OTA_common_ctx_t* ctx)
 {
     if (!ctx)
         return -1;
@@ -966,7 +966,7 @@ static int ota_common_set_pk_key(OTA_common_ctx_t* ctx,
     return 0;
 }
 
-int OTA_set_sha512_private_key(OTA_common_ctx_t* ctx,
+int ota_set_sha512_private_key(OTA_common_ctx_t* ctx,
                                const unsigned char* key_data,
                                size_t key_len)
 {
@@ -979,7 +979,7 @@ int OTA_set_sha512_private_key(OTA_common_ctx_t* ctx,
                                  "signing");
 }
 
-int OTA_set_sha512_public_key(OTA_common_ctx_t* ctx,
+int ota_set_sha512_public_key(OTA_common_ctx_t* ctx,
                               const unsigned char* key_data,
                               size_t key_len)
 {
@@ -1016,7 +1016,7 @@ bool ota_send_data_packet(OTA_common_ctx_t* ctx,
         return false;
     }
 
-    OTA_send_data(ctx, user_ctx, send_buffer, bytes_written);
+    ota_send_data(ctx, user_ctx, send_buffer, bytes_written);
     ota_common_debug_log(ctx, user_ctx,
                          "OTA: DATA packet sent (%zu bytes)\n", size);
     return true;
@@ -1033,7 +1033,7 @@ void ota_send_ack_packet(OTA_common_ctx_t* ctx, void* user_ctx)
     size_t ack_size = ota_packet_write_ack(ack_buffer, sizeof(ack_buffer));
     if (ack_size > 0)
     {
-        OTA_send_data(ctx, user_ctx, ack_buffer, ack_size);
+        ota_send_data(ctx, user_ctx, ack_buffer, ack_size);
     }
 }
 
@@ -1048,7 +1048,7 @@ void ota_send_nack_packet(OTA_common_ctx_t* ctx, void* user_ctx)
     size_t nack_size = ota_packet_write_nack(nack_buffer, sizeof(nack_buffer));
     if (nack_size > 0)
     {
-        OTA_send_data(ctx, user_ctx, nack_buffer, nack_size);
+        ota_send_data(ctx, user_ctx, nack_buffer, nack_size);
     }
 }
 
@@ -1090,7 +1090,7 @@ bool ota_send_fin_packet(OTA_common_ctx_t* ctx, void* user_ctx)
         return false;
     }
 
-    OTA_send_data(ctx, user_ctx, fin_buffer, fin_size);
+    ota_send_data(ctx, user_ctx, fin_buffer, fin_size);
     ota_common_debug_log(ctx, user_ctx,
                          "OTA: FIN packet sent with signature\n");
     return true;

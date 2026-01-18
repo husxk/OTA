@@ -1,7 +1,7 @@
 #include "internal/ota_server_internal.h"
+#include "internal/ota_common.h"
 #include "internal/packet.h"
 #include "libota/protocol.h"
-#include "libota/ota_common.h"
 #include <mbedtls/ssl.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -21,7 +21,7 @@ int ota_server_init(OTA_server_ctx* ctx)
         {
             ota_common_debug_log(&ctx->common, NULL,
                                  "Error: PKI data not set. "
-                                 "Call OTA_set_pki_data() first\n");
+                                 "Call ota_set_pki_data() first\n");
             return -1;
         }
 

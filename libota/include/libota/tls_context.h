@@ -11,8 +11,6 @@
 extern "C" {
 #endif
 
-// Forward declaration
-struct ota_common_ctx;
 typedef struct ota_common_ctx OTA_common_ctx_t;
 
 // Entropy callback function type

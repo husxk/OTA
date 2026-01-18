@@ -1,6 +1,6 @@
 #include "libota/ota_client_builder.h"
 #include "internal/ota_client_internal.h"
-#include "libota/ota_common.h"
+#include "internal/ota_common.h"
 #include "libota/tls_context.h"
 #include <stdlib.h>
 #include <string.h>
@@ -300,7 +300,7 @@ OTA_client_builder_build(OTA_client_builder_t* builder, int* error_code)
     // Set entropy callback if provided (must be done before TLS init)
     if (builder->entropy_cb)
     {
-        if (OTA_set_entropy_cb(builder->entropy_cb, builder->entropy_ctx) != 0)
+        if (ota_set_entropy_cb(builder->entropy_cb, builder->entropy_ctx) != 0)
         {
             if (error_code)
             {
@@ -314,7 +314,7 @@ OTA_client_builder_build(OTA_client_builder_t* builder, int* error_code)
     // Set SHA-512 public key if provided
     if (builder->sha512_public_key_data)
     {
-        if (OTA_set_sha512_public_key(&ctx->common,
+        if (ota_set_sha512_public_key(&ctx->common,
                                       builder->sha512_public_key_data,
                                       builder->sha512_public_key_len) != 0)
         {
@@ -330,7 +330,7 @@ OTA_client_builder_build(OTA_client_builder_t* builder, int* error_code)
     // Enable TLS if requested
     if (builder->tls_enabled)
     {
-        if (OTA_enable_tls(&ctx->common) != 0)
+        if (ota_enable_tls(&ctx->common) != 0)
         {
             if (error_code)
             {

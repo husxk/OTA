@@ -1,6 +1,6 @@
 #include "libota/ota_server_builder.h"
 #include "internal/ota_server_internal.h"
-#include "libota/ota_common.h"
+#include "internal/ota_common.h"
 #include "libota/tls_context.h"
 #include <stdlib.h>
 #include <string.h>
@@ -124,7 +124,7 @@ OTA_server_builder_build(OTA_server_builder_t* builder, int* error_code)
     // Set entropy callback if provided (must be done before TLS init)
     if (builder->entropy_cb)
     {
-        if (OTA_set_entropy_cb(builder->entropy_cb, builder->entropy_ctx) != 0)
+        if (ota_set_entropy_cb(builder->entropy_cb, builder->entropy_ctx) != 0)
         {
             if (error_code)
             {
@@ -138,7 +138,7 @@ OTA_server_builder_build(OTA_server_builder_t* builder, int* error_code)
     // Set SHA-512 private key if provided
     if (builder->sha512_private_key_data)
     {
-        if (OTA_set_sha512_private_key(&ctx->common,
+        if (ota_set_sha512_private_key(&ctx->common,
                                        builder->sha512_private_key_data,
                                        builder->sha512_private_key_len) != 0)
         {
@@ -166,7 +166,7 @@ OTA_server_builder_build(OTA_server_builder_t* builder, int* error_code)
         }
 
         // Set PKI data for TLS
-        if (OTA_set_pki_data(&ctx->common,
+        if (ota_set_pki_data(&ctx->common,
                             builder->pki_cert_data,
                             builder->pki_cert_len,
                             builder->pki_key_data,
@@ -181,7 +181,7 @@ OTA_server_builder_build(OTA_server_builder_t* builder, int* error_code)
         }
 
         // Enable TLS
-        if (OTA_enable_tls(&ctx->common) != 0)
+        if (ota_enable_tls(&ctx->common) != 0)
         {
             if (error_code)
             {

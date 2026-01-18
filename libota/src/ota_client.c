@@ -1,6 +1,6 @@
 #include "libota/ota_client.h"
 #include "internal/ota_client_internal.h"
-#include "libota/ota_common.h"
+#include "internal/ota_common.h"
 #include "internal/packet.h"
 #include "libota/protocol.h"
 #include <mbedtls/ssl.h>
@@ -83,7 +83,7 @@ int OTA_client_tls_restart(OTA_client_ctx* ctx)
         return -1;
     }
 
-    return OTA_tls_restart(&ctx->common);
+    return ota_tls_restart(&ctx->common);
 }
 
 bool OTA_client_tls_is_enabled(OTA_client_ctx* ctx)
@@ -155,7 +155,7 @@ bool OTA_client_handle_data(OTA_client_ctx* ctx,
     // Read from network
     // Use maximum packet size (DATA packet is the largest at 258 bytes)
     uint8_t buffer[OTA_DATA_PACKET_LENGTH];
-    size_t size = OTA_recv_data(&ctx->common, user_ctx,
+    size_t size = ota_recv_data(&ctx->common, user_ctx,
                                 buffer,
                                 sizeof(buffer));
 

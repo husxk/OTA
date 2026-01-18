@@ -1,6 +1,6 @@
 #include "libota/ota_server.h"
 #include "internal/ota_server_internal.h"
-#include "libota/ota_common.h"
+#include "internal/ota_common.h"
 #include "internal/packet.h"
 #include "libota/protocol.h"
 #include <mbedtls/ssl.h>
@@ -28,7 +28,7 @@ static bool ota_server_wait_for_response(OTA_server_ctx* ctx,
     while (response_size == 0 &&
            retry_count < max_retries)
     {
-        response_size = OTA_recv_data(&ctx->common, user_ctx,
+        response_size = ota_recv_data(&ctx->common, user_ctx,
                                       response_buffer,
                                       sizeof(response_buffer));
 

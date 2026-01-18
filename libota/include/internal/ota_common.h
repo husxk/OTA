@@ -1,0 +1,220 @@
+#pragma once
+
+#include "libota/ota_common.h"
+#include "libota/tls_context.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// SHA-512 hash context for image verification
+typedef struct
+{
+    // PSA hash operation for streaming calculation
+    psa_hash_operation_t sha512_operation;
+
+    // Flag indicating if SHA-512 operation is active (initialized)
+    bool sha512_active;
+
+    // SHA-512 hash result (64 bytes for SHA-512)
+    // Set to all zeros when hash is not calculated
+    uint8_t sha512_hash[64];
+
+    // Flag indicating if SHA-512 hash has been calculated
+    bool sha512_calculated;
+
+    // Private key for signing
+    mbedtls_pk_context* sha512_private_key;
+
+    // Public key for signature verification
+    mbedtls_pk_context* sha512_public_key;
+
+    // Signature result (SHA-512 signature length)
+    uint8_t sha512_signature[OTA_SHA512_SIGNATURE_LENGTH];
+
+    // Actual signature length
+    size_t sha512_signature_length;
+
+    // Flag indicating if signature has been calculated
+    bool sha512_signed;
+} ota_sha512_ctx_t;
+
+// Common transfer callbacks shared between client and server
+typedef struct
+{
+    // Network transfer callbacks
+    // Sends data over the network connection
+    void (*transfer_send_cb) (void* ctx,
+                              const uint8_t* data,
+                              size_t size);
+
+    // Receives data from the network connection
+    // Returns: number of bytes actually received
+    size_t (*transfer_receive_cb) (void* ctx,
+                                   uint8_t* buffer,
+                                   size_t max_size);
+
+    // Handles transfer errors
+    void (*transfer_error_cb) (void* ctx,
+                               const char* error_msg);
+
+    // Called when transfer is successfully completed
+    void (*transfer_done_cb) (void* ctx,
+                              uint32_t total_bytes);
+
+    // Debug/Logging callback
+    void (*debug_log_cb) (void* ctx,
+                          const char* format,
+                          va_list args);
+
+} OTA_common_callbacks_t;
+
+// Common OTA context structure
+struct ota_common_ctx
+{
+    // Common callbacks
+    OTA_common_callbacks_t callbacks;
+
+    // TLS context
+    tls_context_t* tls;
+
+    // TLS enabled flag
+    bool tls_enabled;
+
+    // SHA-512 hash context for image verification
+    ota_sha512_ctx_t sha512;
+};
+
+// Validate required common callbacks
+bool ota_common_callbacks_validate(const OTA_common_callbacks_t* callbacks);
+
+// Copy common callbacks from source to destination
+void ota_common_callbacks_copy(OTA_common_callbacks_t* dest,
+                               const OTA_common_callbacks_t* src);
+
+// Common debug logging function
+void ota_common_debug_log(OTA_common_ctx_t* ctx,
+                          void* user_ctx,
+                          const char* format,
+                          ...);
+
+// Common transfer error logging function
+void ota_common_transfer_error(OTA_common_ctx_t* ctx,
+                               void* user_ctx,
+                               const char* error_msg);
+
+// Common send wrapper function
+// Uses TLS if available, otherwise calls transfer_send_cb
+void ota_send_data(OTA_common_ctx_t* ctx,
+                   void* user_ctx,
+                   const uint8_t* data,
+                   size_t size);
+
+// Common receive wrapper function
+// Uses TLS if available, otherwise calls transfer_receive_cb
+// Returns: number of bytes received on success, 0 on error or no data
+size_t ota_recv_data(OTA_common_ctx_t* ctx,
+                     void* user_ctx,
+                     uint8_t* buffer,
+                     size_t max_size);
+
+// Set entropy callback for TLS
+// Returns: 0 on success, negative value on error
+int ota_set_entropy_cb(tls_entropy_cb_t entropy_cb, void* entropy_ctx);
+
+// Ensure PSA crypto is initialized
+int ota_common_ensure_psa_crypto_init(void);
+
+// Set TLS endpoint type
+int ota_tls_set_endpoint(OTA_common_ctx_t* ctx, int endpoint);
+
+// Initialize TLS context
+int ota_common_tls_init(OTA_common_ctx_t* ctx);
+
+// Enable TLS transport
+// Returns: 0 on success, negative value on error
+int ota_enable_tls(OTA_common_ctx_t* ctx);
+
+// Check if TLS is enabled
+bool ota_tls_is_enabled(OTA_common_ctx_t* ctx);
+
+// Cleanup TLS context
+int ota_common_tls_cleanup(OTA_common_ctx_t* ctx);
+
+// Restart TLS context (for reconnection scenarios)
+// Cleans up existing TLS context and re-initializes if TLS is enabled
+// Returns: 0 on success, negative value on error
+int ota_tls_restart(OTA_common_ctx_t* ctx);
+
+// Reset common context state
+int ota_common_reset(OTA_common_ctx_t* ctx);
+
+// Full cleanup of common context
+int ota_common_cleanup(OTA_common_ctx_t* ctx);
+
+// Set PKI data (certificate and private key) for TLS server mode
+// Must be called before ota_server_init
+// Data is stored as shallow copy.
+// Returns: 0 on success, negative value on error
+int ota_set_pki_data(OTA_common_ctx_t* ctx,
+                     const unsigned char* cert_data,
+                     size_t cert_len,
+                     const unsigned char* key_data,
+                     size_t key_len);
+
+// Check if PKI data is set
+bool ota_tls_is_pki_data_set(OTA_common_ctx_t* ctx);
+
+// Set user context for TLS callbacks
+void ota_tls_set_user_context(OTA_common_ctx_t* ctx, void* user_ctx);
+
+// Perform TLS handshake
+bool ota_common_tls_handshake(OTA_common_ctx_t* ctx, void* user_ctx, bool blocking);
+
+// Check if TLS handshake is complete
+bool ota_tls_is_handshake_complete(OTA_common_ctx_t* ctx);
+
+// Close TLS connection gracefully
+int ota_tls_close(OTA_common_ctx_t* ctx);
+
+// SHA-512 functions
+int ota_common_sha512_init(OTA_common_ctx_t* ctx);
+int ota_common_sha512_update(OTA_common_ctx_t* ctx,
+                             const uint8_t* data,
+                             size_t size);
+int ota_common_sha512_finish(OTA_common_ctx_t* ctx);
+void ota_common_sha512_cleanup(OTA_common_ctx_t* ctx);
+int ota_common_sha512_sign(OTA_common_ctx_t* ctx);
+int ota_common_sha512_verify(OTA_common_ctx_t* ctx,
+                             const uint8_t* signature,
+                             size_t signature_len);
+
+// Set private key for SHA-512 signing
+// key_data: Pointer to key data in PEM or DER format
+// key_len: Length of key data
+// Returns: 0 on success, negative value on error
+int ota_set_sha512_private_key(OTA_common_ctx_t* ctx,
+                               const unsigned char* key_data,
+                               size_t key_len);
+
+// Set public key for SHA-512 signature verification
+// key_data: Pointer to key data in PEM or DER format
+// key_len: Length of key data
+// Returns: 0 on success, negative value on error
+int ota_set_sha512_public_key(OTA_common_ctx_t* ctx,
+                              const unsigned char* key_data,
+                              size_t key_len);
+
+// Packet sending functions
+bool ota_send_data_packet(OTA_common_ctx_t* ctx,
+                          void* user_ctx,
+                          const uint8_t* data,
+                          size_t size);
+void ota_send_ack_packet(OTA_common_ctx_t* ctx, void* user_ctx);
+void ota_send_nack_packet(OTA_common_ctx_t* ctx, void* user_ctx);
+bool ota_send_fin_packet(OTA_common_ctx_t* ctx, void* user_ctx);
+
+
+#ifdef __cplusplus
+}
+#endif

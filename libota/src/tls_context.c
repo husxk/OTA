@@ -1,4 +1,4 @@
-#include "libota/ota_common.h"
+#include "internal/ota_common.h"
 #include "libota/tls_context.h"
 #include <mbedtls/ssl.h>
 #include <mbedtls/error.h>

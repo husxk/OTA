@@ -1,6 +1,7 @@
 #pragma once
 
 #include "libota/ota_server.h"
+#include "internal/ota_common.h"
 #include "libota/ota_common.h"
 
 // Internal: Server-specific callbacks structure
