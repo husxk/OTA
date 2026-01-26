@@ -16,6 +16,6 @@ install: build/
 	CMAKE_INSTALL_PREFIX=$(CMAKE_INSTALL_PREFIX) scripts/install.sh
 
 clean:
-	rm -rf build/ mbedtls_config.h mbedtls_crypto_config.h
+	rm -rf build/
 
 .PHONY: all pico install clean
