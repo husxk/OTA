@@ -59,12 +59,12 @@ target_include_directories(${MAIN_NAME} PRIVATE
           ${CMAKE_CURRENT_LIST_DIR}/.. # for our common lwipopts
         )
 
-find_package(PkgConfig REQUIRED)
+        #find_package(PkgConfig REQUIRED)
 
-pkg_check_modules(LIBOTA REQUIRED libota)
+        #pkg_check_modules(LIBOTA REQUIRED libota)
 
-target_include_directories(${MAIN_NAME} PRIVATE ${LIBOTA_INCLUDE_DIRS})
-target_compile_options(${MAIN_NAME} PRIVATE ${LIBOTA_CFLAGS_OTHER})
+        #target_include_directories(${MAIN_NAME} PRIVATE ${LIBOTA_INCLUDE_DIRS})
+        #target_compile_options(${MAIN_NAME} PRIVATE ${LIBOTA_CFLAGS_OTHER})
 
 target_compile_options(${MAIN_NAME} PRIVATE
     -ffunction-sections
@@ -76,7 +76,8 @@ target_link_libraries(${MAIN_NAME}
           pico_stdlib
           hardware_spi
           hardware_pwm
-          ${LIBOTA_LDFLAGS}
+          libota_pico
+          #          ${LIBOTA_LDFLAGS}
         )
 
 pico_add_extra_outputs(${MAIN_NAME})

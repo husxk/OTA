@@ -44,7 +44,7 @@ set(ENABLE_PROGRAMS OFF CACHE BOOL "Build Mbed TLS programs." FORCE)
 # Add mbedTLS submodule
 add_subdirectory(libs/mbedtls)
 
-target_link_libraries(${PROJECT_NAME} PUBLIC
+target_link_libraries(${PROJECT_NAME} PRIVATE
     mbedtls
     mbedx509
     mbedcrypto
